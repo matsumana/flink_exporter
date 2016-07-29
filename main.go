@@ -74,7 +74,8 @@ func initExporter(c *cli.Context, reg *harness.MetricRegistry) (harness.Collecto
 }
 
 func (col *collector) Collect(reg *harness.MetricRegistry) {
-	overview := c.GetOverview(flinkJobManagerUrl)
+	o := c.Overview{}
+	overview := o.GetOverview(flinkJobManagerUrl)
 	reg.Get("flink_overview_taskmanagers").(prometheus.Gauge).Set(float64(overview.TaskManagers))
 	reg.Get("flink_overview_slots_total").(prometheus.Gauge).Set(float64(overview.SlotsTotal))
 	reg.Get("flink_overview_slots_available").(prometheus.Gauge).Set(float64(overview.SlotsAvailable))
@@ -83,6 +84,7 @@ func (col *collector) Collect(reg *harness.MetricRegistry) {
 	reg.Get("flink_overview_jobs_cancelled").(prometheus.Gauge).Set(float64(overview.JobsCancelled))
 	reg.Get("flink_overview_jobs_failed").(prometheus.Gauge).Set(float64(overview.JobsFailed))
 
-	writeRecords := c.GetWriteRecords(flinkJobManagerUrl)
+	j := c.Job{}
+	writeRecords := j.GetWriteRecords(flinkJobManagerUrl)
 	reg.Get("flink_write_records").(prometheus.Gauge).Set(float64(writeRecords))
 }

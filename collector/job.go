@@ -10,16 +10,18 @@ import (
 	"strings"
 )
 
-type JobMetrics struct {
+type Job struct{}
+
+type jobMetrics struct {
 	ReadBytes    int64
 	WriteBytes   int64
 	ReadRecords  int64
 	WriteRecords int64
 }
 
-func GetWriteRecords(flinkJobManagerUrl string) int64 {
-	jobs := getJobs(flinkJobManagerUrl)
-	jobMetrics := getJobMetrics(flinkJobManagerUrl, jobs)
+func (j *Job) GetWriteRecords(flinkJobManagerUrl string) int64 {
+	jobs := j.getJobs(flinkJobManagerUrl)
+	jobMetrics := j.getJobMetrics(flinkJobManagerUrl, jobs)
 
 	var writeRecords int64
 	for _, jobMetric := range jobMetrics {
@@ -31,7 +33,7 @@ func GetWriteRecords(flinkJobManagerUrl string) int64 {
 	return writeRecords
 }
 
-func getJobs(flinkJobManagerUrl string) []string {
+func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 	url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs"
 	log.Debug(url)
 
@@ -74,8 +76,8 @@ func getJobs(flinkJobManagerUrl string) []string {
 	return jobs
 }
 
-func getJobMetrics(flinkJobManagerUrl string, jobs []string) []JobMetrics {
-	jobMetrics := []JobMetrics{}
+func (j *Job) getJobMetrics(flinkJobManagerUrl string, jobs []string) []jobMetrics {
+	metrics := []jobMetrics{}
 	for _, job := range jobs {
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
 		log.Debug(url)
@@ -83,18 +85,18 @@ func getJobMetrics(flinkJobManagerUrl string, jobs []string) []JobMetrics {
 		response, err := http.Get(url)
 		if err != nil {
 			log.Errorf("http.Get = %v", err)
-			return []JobMetrics{}
+			return []jobMetrics{}
 		}
 		defer response.Body.Close()
 
 		body, err := ioutil.ReadAll(response.Body)
 		if err != nil {
 			log.Errorf("ioutil.ReadAll = %v", err)
-			return []JobMetrics{}
+			return []jobMetrics{}
 		}
 		if response.StatusCode != 200 {
 			log.Errorf("response.StatusCode = %v", response.StatusCode)
-			return []JobMetrics{}
+			return []jobMetrics{}
 		}
 
 		jsonStr := string(body)
@@ -104,7 +106,7 @@ func getJobMetrics(flinkJobManagerUrl string, jobs []string) []JobMetrics {
 		js, err := simpleJson.NewJson([]byte(jsonStr))
 		if err != nil {
 			log.Errorf("simpleJson.NewJson = %v", err)
-			return []JobMetrics{}
+			return []jobMetrics{}
 		}
 
 		// vertices
@@ -112,7 +114,7 @@ func getJobMetrics(flinkJobManagerUrl string, jobs []string) []JobMetrics {
 		vertices, err = js.Get("vertices").Array()
 		if err != nil {
 			log.Errorf("js.Get 'vertices' = %v", err)
-			return []JobMetrics{}
+			return []jobMetrics{}
 		}
 		log.Debugf("vertices = %v", vertices)
 
@@ -123,7 +125,7 @@ func getJobMetrics(flinkJobManagerUrl string, jobs []string) []JobMetrics {
 			// only start with 'Source'
 			if strings.HasPrefix(fmt.Sprint(vertice["name"]), "Source") {
 				m, _ := vertice["metrics"].(map[string]interface{})
-				verticesMetric := JobMetrics{}
+				verticesMetric := jobMetrics{}
 				verticesMetric.ReadBytes, _ = strconv.ParseInt(fmt.Sprint(m["read-bytes"]), 10, 64)
 				verticesMetric.WriteBytes, _ = strconv.ParseInt(fmt.Sprint(m["write-bytes"]), 10, 64)
 				verticesMetric.ReadRecords, _ = strconv.ParseInt(fmt.Sprint(m["read-records"]), 10, 64)
@@ -131,12 +133,12 @@ func getJobMetrics(flinkJobManagerUrl string, jobs []string) []JobMetrics {
 
 				log.Debugf("verticesMetric = %v", verticesMetric)
 
-				jobMetrics = append(jobMetrics, verticesMetric)
+				metrics = append(metrics, verticesMetric)
 			}
 		}
 	}
 
-	log.Debugf("jobMetrics = %v", jobMetrics)
+	log.Debugf("metrics = %v", metrics)
 
-	return jobMetrics
+	return metrics
 }
