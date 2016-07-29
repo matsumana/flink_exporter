@@ -36,6 +36,7 @@ func initExporter(c *cli.Context, reg *harness.MetricRegistry) (harness.Collecto
 	flinkJobManagerUrl = c.String("flink-job-manager-url")
 	log.Debug(flinkJobManagerUrl)
 
+	// overview
 	reg.Register("flink_overview_taskmanagers", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_taskmanagers",
 		Help: "is quantity of flink taskmanagers",
@@ -65,17 +66,49 @@ func initExporter(c *cli.Context, reg *harness.MetricRegistry) (harness.Collecto
 		Help: "is quantity of flink jobs-failed",
 	}))
 
+	// Read/Write
 	reg.Register("flink_write_records", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_write_records",
 		Help: "is quantity of flink write records",
+	}))
+
+	// checkpoint
+	reg.Register("flink_checkpoint_count", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_count",
+		Help: "is quantity of flink checkpoint count",
+	}))
+	reg.Register("flink_checkpoint_duration_min", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_duration_min",
+		Help: "is quantity of flink checkpoint duration min",
+	}))
+	reg.Register("flink_checkpoint_duration_max", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_duration_max",
+		Help: "is quantity of flink checkpoint duration max",
+	}))
+	reg.Register("flink_checkpoint_duration_avg", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_duration_avg",
+		Help: "is quantity of flink checkpoint duration avg",
+	}))
+	reg.Register("flink_checkpoint_size_min", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_size_min",
+		Help: "is quantity of flink checkpoint size min",
+	}))
+	reg.Register("flink_checkpoint_size_max", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_size_max",
+		Help: "is quantity of flink checkpoint size max",
+	}))
+	reg.Register("flink_checkpoint_size_avg", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_size_avg",
+		Help: "is quantity of flink checkpoint size avg",
 	}))
 
 	return &collector{}, nil
 }
 
 func (col *collector) Collect(reg *harness.MetricRegistry) {
+	// overview
 	o := c.Overview{}
-	overview := o.GetOverview(flinkJobManagerUrl)
+	overview := o.GetMetrics(flinkJobManagerUrl)
 	reg.Get("flink_overview_taskmanagers").(prometheus.Gauge).Set(float64(overview.TaskManagers))
 	reg.Get("flink_overview_slots_total").(prometheus.Gauge).Set(float64(overview.SlotsTotal))
 	reg.Get("flink_overview_slots_available").(prometheus.Gauge).Set(float64(overview.SlotsAvailable))
@@ -84,7 +117,17 @@ func (col *collector) Collect(reg *harness.MetricRegistry) {
 	reg.Get("flink_overview_jobs_cancelled").(prometheus.Gauge).Set(float64(overview.JobsCancelled))
 	reg.Get("flink_overview_jobs_failed").(prometheus.Gauge).Set(float64(overview.JobsFailed))
 
+	// Read/Write
 	j := c.Job{}
-	writeRecords := j.GetWriteRecords(flinkJobManagerUrl)
+	writeRecords, checkpoint := j.GetMetrics(flinkJobManagerUrl)
 	reg.Get("flink_write_records").(prometheus.Gauge).Set(float64(writeRecords))
+
+	// checkpoint
+	reg.Get("flink_checkpoint_count").(prometheus.Gauge).Set(float64(checkpoint.Count))
+	reg.Get("flink_checkpoint_duration_min").(prometheus.Gauge).Set(float64(checkpoint.DurationMin))
+	reg.Get("flink_checkpoint_duration_max").(prometheus.Gauge).Set(float64(checkpoint.DurationMax))
+	reg.Get("flink_checkpoint_duration_avg").(prometheus.Gauge).Set(float64(checkpoint.DurationAvg))
+	reg.Get("flink_checkpoint_size_min").(prometheus.Gauge).Set(float64(checkpoint.SizeMin))
+	reg.Get("flink_checkpoint_size_max").(prometheus.Gauge).Set(float64(checkpoint.SizeMax))
+	reg.Get("flink_checkpoint_size_avg").(prometheus.Gauge).Set(float64(checkpoint.SizeAvg))
 }

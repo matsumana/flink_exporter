@@ -4,58 +4,58 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	simpleJson "github.com/bitly/go-simplejson"
-	"io/ioutil"
-	"net/http"
 	"strconv"
 	"strings"
 )
 
 type Job struct{}
 
-type jobMetrics struct {
+type ReadWriteMetricks struct {
 	ReadBytes    int64
 	WriteBytes   int64
 	ReadRecords  int64
 	WriteRecords int64
 }
 
-func (j *Job) GetWriteRecords(flinkJobManagerUrl string) int64 {
+type CheckpointMetricks struct {
+	Count       int64
+	DurationMin int
+	DurationMax int
+	DurationAvg int
+	SizeMin     int64
+	SizeMax     int64
+	SizeAvg     int64
+}
+
+type checkpoint struct {
+	Count    int64
+	Duration int
+	Size     int64
+}
+
+func (j *Job) GetMetrics(flinkJobManagerUrl string) (int64, CheckpointMetricks) {
 	jobs := j.getJobs(flinkJobManagerUrl)
-	jobMetrics := j.getJobMetrics(flinkJobManagerUrl, jobs)
 
 	var writeRecords int64
-	for _, jobMetric := range jobMetrics {
-		writeRecords += jobMetric.WriteRecords
+	readWrites := j.getReadWriteMetricks(flinkJobManagerUrl, jobs)
+	for _, readWrite := range readWrites {
+		writeRecords += readWrite.WriteRecords
 	}
-
 	log.Debugf("writeRecords = %v", writeRecords)
 
-	return writeRecords
+	checkpoint := j.getCheckpoints(flinkJobManagerUrl, jobs)
+
+	return writeRecords, checkpoint
 }
 
 func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 	url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs"
-	log.Debug(url)
-
-	response, err := http.Get(url)
+	httpClient := HttpClient{}
+	jsonStr, err := httpClient.Get(url)
 	if err != nil {
-		log.Errorf("http.Get = %v", err)
+		log.Errorf("HttpClient.Get = %v", err)
 		return []string{}
 	}
-	defer response.Body.Close()
-
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Errorf("ioutil.ReadAll = %v", err)
-		return []string{}
-	}
-	if response.StatusCode != 200 {
-		log.Errorf("response.StatusCode = %v", response.StatusCode)
-		return []string{}
-	}
-
-	jsonStr := string(body)
-	log.Debug(jsonStr)
 
 	// parse
 	js, err := simpleJson.NewJson([]byte(jsonStr))
@@ -76,37 +76,22 @@ func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 	return jobs
 }
 
-func (j *Job) getJobMetrics(flinkJobManagerUrl string, jobs []string) []jobMetrics {
-	metrics := []jobMetrics{}
+func (j *Job) getReadWriteMetricks(flinkJobManagerUrl string, jobs []string) []ReadWriteMetricks {
+	readWrite := []ReadWriteMetricks{}
 	for _, job := range jobs {
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
-		log.Debug(url)
-
-		response, err := http.Get(url)
+		httpClient := HttpClient{}
+		jsonStr, err := httpClient.Get(url)
 		if err != nil {
-			log.Errorf("http.Get = %v", err)
-			return []jobMetrics{}
+			log.Errorf("HttpClient.Get = %v", err)
+			return []ReadWriteMetricks{}
 		}
-		defer response.Body.Close()
-
-		body, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			log.Errorf("ioutil.ReadAll = %v", err)
-			return []jobMetrics{}
-		}
-		if response.StatusCode != 200 {
-			log.Errorf("response.StatusCode = %v", response.StatusCode)
-			return []jobMetrics{}
-		}
-
-		jsonStr := string(body)
-		log.Debug(jsonStr)
 
 		// parse
 		js, err := simpleJson.NewJson([]byte(jsonStr))
 		if err != nil {
 			log.Errorf("simpleJson.NewJson = %v", err)
-			return []jobMetrics{}
+			return []ReadWriteMetricks{}
 		}
 
 		// vertices
@@ -114,18 +99,18 @@ func (j *Job) getJobMetrics(flinkJobManagerUrl string, jobs []string) []jobMetri
 		vertices, err = js.Get("vertices").Array()
 		if err != nil {
 			log.Errorf("js.Get 'vertices' = %v", err)
-			return []jobMetrics{}
+			return []ReadWriteMetricks{}
 		}
 		log.Debugf("vertices = %v", vertices)
 
 		for _, vertice := range vertices {
-			vertice, _ := vertice.(map[string]interface{})
-			log.Debugf("metrics = %v", vertice["metrics"])
+			v, _ := vertice.(map[string]interface{})
+			log.Debugf("metrics = %v", v["metrics"])
 
 			// only start with 'Source'
-			if strings.HasPrefix(fmt.Sprint(vertice["name"]), "Source") {
-				m, _ := vertice["metrics"].(map[string]interface{})
-				verticesMetric := jobMetrics{}
+			if strings.HasPrefix(fmt.Sprint(v["name"]), "Source") {
+				m, _ := v["metrics"].(map[string]interface{})
+				verticesMetric := ReadWriteMetricks{}
 				verticesMetric.ReadBytes, _ = strconv.ParseInt(fmt.Sprint(m["read-bytes"]), 10, 64)
 				verticesMetric.WriteBytes, _ = strconv.ParseInt(fmt.Sprint(m["write-bytes"]), 10, 64)
 				verticesMetric.ReadRecords, _ = strconv.ParseInt(fmt.Sprint(m["read-records"]), 10, 64)
@@ -133,12 +118,146 @@ func (j *Job) getJobMetrics(flinkJobManagerUrl string, jobs []string) []jobMetri
 
 				log.Debugf("verticesMetric = %v", verticesMetric)
 
-				metrics = append(metrics, verticesMetric)
+				readWrite = append(readWrite, verticesMetric)
 			}
 		}
 	}
 
-	log.Debugf("metrics = %v", metrics)
+	log.Debugf("readWrite = %v", readWrite)
 
-	return metrics
+	return readWrite
+}
+
+func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) CheckpointMetricks {
+	checkpoints := []checkpoint{}
+	httpClient := HttpClient{}
+	for _, job := range jobs {
+		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/checkpoints"
+		jsonStr, err := httpClient.Get(url)
+		if err != nil {
+			log.Errorf("HttpClient.Get = %v", err)
+			return CheckpointMetricks{}
+		}
+
+		// not exists checkpoint info
+		if jsonStr == "{}" {
+			continue
+		}
+
+		// parse
+		js, err := simpleJson.NewJson([]byte(jsonStr))
+		if err != nil {
+			log.Errorf("simpleJson.NewJson = %v", err)
+			return CheckpointMetricks{}
+		}
+
+		checkpoint := checkpoint{
+			Count:    -1,
+			Duration: -1,
+			Size:     -1,
+		}
+
+		// count
+		checkpoint.Count, err = js.Get("count").Int64()
+		if err != nil {
+			log.Errorf("js.Get 'count' = %v", err)
+			return CheckpointMetricks{}
+		}
+		log.Debugf("count = %v", checkpoint.Count)
+
+		// history
+		var histories []interface{}
+		histories, err = js.Get("history").Array()
+		if err != nil {
+			log.Errorf("js.Get 'history' = %v", err)
+			return CheckpointMetricks{}
+		}
+		log.Debugf("history = %v", histories)
+
+		if len(histories) > 0 {
+			history, _ := histories[0].(map[string]interface{})
+			checkpoint.Duration, _ = strconv.Atoi(fmt.Sprint(history["duration"]))
+			checkpoint.Size, _ = strconv.ParseInt(fmt.Sprint(history["size"]), 10, 64)
+
+			log.Debugf("checkpoint = %v", checkpoint)
+
+			checkpoints = append(checkpoints, checkpoint)
+		}
+	}
+
+	log.Debugf("checkpoints = %v", checkpoints)
+
+	cp := CheckpointMetricks{
+		Count:       -1,
+		DurationMin: -1,
+		DurationMax: -1,
+		DurationAvg: -1,
+		SizeMin:     -1,
+		SizeMax:     -1,
+		SizeAvg:     -1,
+	}
+
+	if len(checkpoints) > 0 {
+		// avg
+		var sumCount int64
+		var sumDuration int
+		var sumSize int64
+		for _, checkpoint := range checkpoints {
+			sumCount += checkpoint.Count
+			sumDuration += checkpoint.Duration
+			sumSize += checkpoint.Size
+		}
+		log.Debugf("len(checkpoints) = %v", int64(len(checkpoints)))
+		log.Debugf("sumCount = %v", sumCount)
+		log.Debugf("sumDuration = %v", sumDuration)
+		log.Debugf("sumSize = %v", sumSize)
+
+		cp.Count = sumCount
+		cp.DurationAvg = sumDuration / len(checkpoints)
+		cp.SizeAvg = sumSize / int64(len(checkpoints))
+
+		latest := checkpoints[0]
+
+		// min
+		countMin := latest.Count
+		durationMin := latest.Duration
+		sizeMin := latest.Size
+		for _, checkpoint := range checkpoints {
+			// smaller?
+			if checkpoint.Count < countMin {
+				countMin = checkpoint.Count
+			}
+			if checkpoint.Duration < durationMin {
+				durationMin = checkpoint.Duration
+			}
+			if checkpoint.Size < sizeMin {
+				sizeMin = checkpoint.Size
+			}
+		}
+		cp.DurationMin = durationMin
+		cp.SizeMin = sizeMin
+
+		// max
+		countMax := latest.Count
+		durationMax := latest.Duration
+		sizeMax := latest.Size
+		for _, checkpoint := range checkpoints {
+			// bigger?
+			if checkpoint.Count > countMax {
+				countMax = checkpoint.Count
+			}
+			if checkpoint.Duration > durationMax {
+				durationMax = checkpoint.Duration
+			}
+			if checkpoint.Size > sizeMax {
+				sizeMax = checkpoint.Size
+			}
+		}
+		cp.DurationMax = durationMax
+		cp.SizeMax = sizeMax
+	}
+
+	log.Debugf("checkpoint = %v", cp)
+
+	return cp
 }

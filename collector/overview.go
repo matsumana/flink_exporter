@@ -19,7 +19,7 @@ type Overview struct {
 	FlinkVersion   string
 }
 
-func (o *Overview) GetOverview(flinkJobManagerUrl string) Overview {
+func (o *Overview) GetMetrics(flinkJobManagerUrl string) Overview {
 	url := strings.Trim(flinkJobManagerUrl, "/") + "/overview"
 	log.Debug(url)
 
