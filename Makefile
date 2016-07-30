@@ -1,4 +1,3 @@
-# VERSION=$(shell grep 'version = ' main.go | awk '{print $3}' | sed -e 's/"//g')V
 VERSION=$(patsubst "%",%,$(lastword $(shell grep 'version = ' main.go)))
 GOX_OPTS="{{.Dir}}_{{.OS}}_{{.Arch}}_v$(VERSION)"
 
