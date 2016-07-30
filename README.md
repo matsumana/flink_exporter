@@ -1,3 +1,16 @@
+[Prometheus](https://prometheus.io/) exporter for [Apache Flink](https://flink.apache.org/).
+
+# Command Line Options
+
+Name     | Description | Default
+---------|-------------|----
+port | exporter's port number | 9160
+log-level | Set Logging level | info
+interval | Interval to fetch metrics from the endpoint in second | 60
+flink-job-manager-url | flink job manager url | http://localhost:8081/
+
+---
+
 # Prepare
 
 ## install gox
@@ -17,11 +30,15 @@ $ glide install
 # Build
 
 ```
-$ gox --osarch "darwin/amd64 linux/amd64"
+# for Mac
+$ make mac
+
+# for Linux
+$ make linux
 ```
 
 # Run app
 
 ```
-$ ./flink_exporter_xxx_xxx --flink-job-manager-url=http://localhost:8081/ --interval=15
+$ ./flink_exporter_xxx_xxx <options>
 ```
