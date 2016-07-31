@@ -8,10 +8,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	version = "0.1.0"
-)
-
 var (
 	flinkJobManagerUrl string
 )

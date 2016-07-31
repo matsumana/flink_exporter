@@ -1,4 +1,4 @@
-VERSION=$(patsubst "%",%,$(lastword $(shell grep 'version = ' main.go)))
+VERSION=$(patsubst "%",%,$(lastword $(shell grep 'version = ' version.go)))
 GOX_OPTS="{{.Dir}}_{{.OS}}_{{.Arch}}_v$(VERSION)"
 
 all: mac linux
