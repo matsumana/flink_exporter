@@ -39,79 +39,79 @@ func initExporter(c *cli.Context, reg *harness.MetricRegistry) (harness.Collecto
 	// overview
 	reg.Register("flink_overview_taskmanagers", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_taskmanagers",
-		Help: "is quantity of flink taskmanagers",
+		Help: "flink overview taskmanagers",
 	}))
 	reg.Register("flink_overview_slots_total", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_slots_total",
-		Help: "is quantity of flink slots-total",
+		Help: "flink overview slots-total",
 	}))
 	reg.Register("flink_overview_slots_available", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_slots_available",
-		Help: "is quantity of flink slots-available",
+		Help: "flink overview slots-available",
 	}))
 	reg.Register("flink_overview_jobs_running", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_jobs_running",
-		Help: "is quantity of flink jobs-running",
+		Help: "flink overview jobs-running",
 	}))
 	reg.Register("flink_overview_jobs_finished", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_jobs_finished",
-		Help: "is quantity of flink jobs-finished",
+		Help: "flink overview jobs-finished",
 	}))
 	reg.Register("flink_overview_jobs_cancelled", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_jobs_cancelled",
-		Help: "is quantity of flink jobs-cancelled",
+		Help: "flink overview jobs-cancelled",
 	}))
 	reg.Register("flink_overview_jobs_failed", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_overview_jobs_failed",
-		Help: "is quantity of flink jobs-failed",
+		Help: "flink overview jobs-failed",
 	}))
 
 	// Read/Write
 	reg.Register("flink_read_bytes", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_read_bytes",
-		Help: "is quantity of flink read bytes",
+		Help: "flink read bytes",
 	}))
 	reg.Register("flink_read_records", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_read_records",
-		Help: "is quantity of flink read records",
+		Help: "flink read records",
 	}))
 	reg.Register("flink_write_bytes", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_write_bytes",
-		Help: "is quantity of flink write bytes",
+		Help: "flink write bytes",
 	}))
 	reg.Register("flink_write_records", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_write_records",
-		Help: "is quantity of flink write records",
+		Help: "flink write records",
 	}))
 
 	// checkpoint
 	reg.Register("flink_checkpoint_count", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_count",
-		Help: "is quantity of flink checkpoint count",
+		Help: "flink checkpoint count",
 	}))
 	reg.Register("flink_checkpoint_duration_min", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_duration_min",
-		Help: "is quantity of flink checkpoint duration min",
+		Help: "flink checkpoint duration min",
 	}))
 	reg.Register("flink_checkpoint_duration_max", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_duration_max",
-		Help: "is quantity of flink checkpoint duration max",
+		Help: "flink checkpoint duration max",
 	}))
 	reg.Register("flink_checkpoint_duration_avg", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_duration_avg",
-		Help: "is quantity of flink checkpoint duration avg",
+		Help: "flink checkpoint duration avg",
 	}))
 	reg.Register("flink_checkpoint_size_min", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_size_min",
-		Help: "is quantity of flink checkpoint size min",
+		Help: "flink checkpoint size min",
 	}))
 	reg.Register("flink_checkpoint_size_max", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_size_max",
-		Help: "is quantity of flink checkpoint size max",
+		Help: "flink checkpoint size max",
 	}))
 	reg.Register("flink_checkpoint_size_avg", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_size_avg",
-		Help: "is quantity of flink checkpoint size avg",
+		Help: "flink checkpoint size avg",
 	}))
 
 	return &collector{}, nil
