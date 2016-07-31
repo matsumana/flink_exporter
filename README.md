@@ -1,5 +1,31 @@
 [Prometheus](https://prometheus.io/) exporter for [Apache Flink](https://flink.apache.org/).
 
+# export metrics
+
+- Overview
+  - flink_overview_taskmanagers
+  - flink_overview_slots_total
+  - flink_overview_slots_available
+  - flink_overview_jobs_running
+  - flink_overview_jobs_finished
+  - flink_overview_jobs_failed
+  - flink_overview_jobs_cancelled
+
+- Read/Write Bytes & Records
+  - flink_read_bytes
+  - flink_read_records
+  - flink_write_bytes
+  - flink_write_records
+
+- Checkpoint
+  - flink_checkpoint_count
+  - flink_checkpoint_duration_min
+  - flink_checkpoint_duration_max
+  - flink_checkpoint_duration_avg
+  - flink_checkpoint_size_min
+  - flink_checkpoint_size_max
+  - flink_checkpoint_size_avg
+
 # Command Line Options
 
 Name     | Description | Default
