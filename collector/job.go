@@ -10,14 +10,14 @@ import (
 
 type Job struct{}
 
-type ReadWriteMetricks struct {
+type ReadWriteMertics struct {
 	ReadBytes    int64
 	WriteBytes   int64
 	ReadRecords  int64
 	WriteRecords int64
 }
 
-type CheckpointMetricks struct {
+type CheckpointMetrics struct {
 	Count       int64
 	DurationMin int
 	DurationMax int
@@ -33,19 +33,11 @@ type checkpoint struct {
 	Size     int64
 }
 
-func (j *Job) GetMetrics(flinkJobManagerUrl string) (int64, CheckpointMetricks) {
+func (j *Job) GetMetrics(flinkJobManagerUrl string) (ReadWriteMertics, CheckpointMetrics) {
 	jobs := j.getJobs(flinkJobManagerUrl)
-
-	var writeRecords int64
-	readWrites := j.getReadWriteMetricks(flinkJobManagerUrl, jobs)
-	for _, readWrite := range readWrites {
-		writeRecords += readWrite.WriteRecords
-	}
-	log.Debugf("writeRecords = %v", writeRecords)
-
+	readWrite := j.getReadWrite(flinkJobManagerUrl, jobs)
 	checkpoint := j.getCheckpoints(flinkJobManagerUrl, jobs)
-
-	return writeRecords, checkpoint
+	return readWrite, checkpoint
 }
 
 func (j *Job) getJobs(flinkJobManagerUrl string) []string {
@@ -76,22 +68,22 @@ func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 	return jobs
 }
 
-func (j *Job) getReadWriteMetricks(flinkJobManagerUrl string, jobs []string) []ReadWriteMetricks {
-	readWrite := []ReadWriteMetricks{}
+func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteMertics {
+	readWrite := ReadWriteMertics{}
 	for _, job := range jobs {
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
 		httpClient := HttpClient{}
 		jsonStr, err := httpClient.Get(url)
 		if err != nil {
 			log.Errorf("HttpClient.Get = %v", err)
-			return []ReadWriteMetricks{}
+			return ReadWriteMertics{}
 		}
 
 		// parse
 		js, err := simpleJson.NewJson([]byte(jsonStr))
 		if err != nil {
 			log.Errorf("simpleJson.NewJson = %v", err)
-			return []ReadWriteMetricks{}
+			return ReadWriteMertics{}
 		}
 
 		// vertices
@@ -99,7 +91,7 @@ func (j *Job) getReadWriteMetricks(flinkJobManagerUrl string, jobs []string) []R
 		vertices, err = js.Get("vertices").Array()
 		if err != nil {
 			log.Errorf("js.Get 'vertices' = %v", err)
-			return []ReadWriteMetricks{}
+			return ReadWriteMertics{}
 		}
 		log.Debugf("vertices = %v", vertices)
 
@@ -109,16 +101,17 @@ func (j *Job) getReadWriteMetricks(flinkJobManagerUrl string, jobs []string) []R
 
 			// only start with 'Source'
 			if strings.HasPrefix(fmt.Sprint(v["name"]), "Source") {
-				m, _ := v["metrics"].(map[string]interface{})
-				verticesMetric := ReadWriteMetricks{}
-				verticesMetric.ReadBytes, _ = strconv.ParseInt(fmt.Sprint(m["read-bytes"]), 10, 64)
-				verticesMetric.WriteBytes, _ = strconv.ParseInt(fmt.Sprint(m["write-bytes"]), 10, 64)
-				verticesMetric.ReadRecords, _ = strconv.ParseInt(fmt.Sprint(m["read-records"]), 10, 64)
-				verticesMetric.WriteRecords, _ = strconv.ParseInt(fmt.Sprint(m["write-records"]), 10, 64)
+				metrics, _ := v["metrics"].(map[string]interface{})
+				record := ReadWriteMertics{}
+				record.ReadBytes, _ = strconv.ParseInt(fmt.Sprint(metrics["read-bytes"]), 10, 64)
+				record.WriteBytes, _ = strconv.ParseInt(fmt.Sprint(metrics["write-bytes"]), 10, 64)
+				record.ReadRecords, _ = strconv.ParseInt(fmt.Sprint(metrics["read-records"]), 10, 64)
+				record.WriteRecords, _ = strconv.ParseInt(fmt.Sprint(metrics["write-records"]), 10, 64)
 
-				log.Debugf("verticesMetric = %v", verticesMetric)
-
-				readWrite = append(readWrite, verticesMetric)
+				readWrite.ReadBytes += record.ReadBytes
+				readWrite.ReadRecords += record.ReadRecords
+				readWrite.WriteBytes += record.WriteBytes
+				readWrite.WriteRecords += record.WriteRecords
 			}
 		}
 	}
@@ -128,7 +121,7 @@ func (j *Job) getReadWriteMetricks(flinkJobManagerUrl string, jobs []string) []R
 	return readWrite
 }
 
-func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) CheckpointMetricks {
+func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) CheckpointMetrics {
 	checkpoints := []checkpoint{}
 	httpClient := HttpClient{}
 	for _, job := range jobs {
@@ -136,7 +129,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		jsonStr, err := httpClient.Get(url)
 		if err != nil {
 			log.Errorf("HttpClient.Get = %v", err)
-			return CheckpointMetricks{}
+			return CheckpointMetrics{}
 		}
 
 		// not exists checkpoint info
@@ -148,7 +141,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		js, err := simpleJson.NewJson([]byte(jsonStr))
 		if err != nil {
 			log.Errorf("simpleJson.NewJson = %v", err)
-			return CheckpointMetricks{}
+			return CheckpointMetrics{}
 		}
 
 		checkpoint := checkpoint{
@@ -161,7 +154,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		checkpoint.Count, err = js.Get("count").Int64()
 		if err != nil {
 			log.Errorf("js.Get 'count' = %v", err)
-			return CheckpointMetricks{}
+			return CheckpointMetrics{}
 		}
 		log.Debugf("count = %v", checkpoint.Count)
 
@@ -170,7 +163,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		histories, err = js.Get("history").Array()
 		if err != nil {
 			log.Errorf("js.Get 'history' = %v", err)
-			return CheckpointMetricks{}
+			return CheckpointMetrics{}
 		}
 		log.Debugf("history = %v", histories)
 
@@ -187,7 +180,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 
 	log.Debugf("checkpoints = %v", checkpoints)
 
-	cp := CheckpointMetricks{
+	cp := CheckpointMetrics{
 		Count:       -1,
 		DurationMin: -1,
 		DurationMax: -1,

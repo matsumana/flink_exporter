@@ -67,6 +67,18 @@ func initExporter(c *cli.Context, reg *harness.MetricRegistry) (harness.Collecto
 	}))
 
 	// Read/Write
+	reg.Register("flink_read_bytes", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_read_bytes",
+		Help: "is quantity of flink read bytes",
+	}))
+	reg.Register("flink_read_records", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_read_records",
+		Help: "is quantity of flink read records",
+	}))
+	reg.Register("flink_write_bytes", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_write_bytes",
+		Help: "is quantity of flink write bytes",
+	}))
 	reg.Register("flink_write_records", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_write_records",
 		Help: "is quantity of flink write records",
@@ -119,8 +131,11 @@ func (col *collector) Collect(reg *harness.MetricRegistry) {
 
 	// Read/Write
 	j := c.Job{}
-	writeRecords, checkpoint := j.GetMetrics(flinkJobManagerUrl)
-	reg.Get("flink_write_records").(prometheus.Gauge).Set(float64(writeRecords))
+	readWriteMertics, checkpoint := j.GetMetrics(flinkJobManagerUrl)
+	reg.Get("flink_read_bytes").(prometheus.Gauge).Set(float64(readWriteMertics.ReadBytes))
+	reg.Get("flink_read_records").(prometheus.Gauge).Set(float64(readWriteMertics.ReadRecords))
+	reg.Get("flink_write_bytes").(prometheus.Gauge).Set(float64(readWriteMertics.WriteBytes))
+	reg.Get("flink_write_records").(prometheus.Gauge).Set(float64(readWriteMertics.WriteRecords))
 
 	// checkpoint
 	reg.Get("flink_checkpoint_count").(prometheus.Gauge).Set(float64(checkpoint.Count))
