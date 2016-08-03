@@ -18,7 +18,9 @@ type ReadWriteMertics struct {
 }
 
 type CheckpointMetrics struct {
-	Count       int64
+	CountMin    int64
+	CountMax    int64
+	CountAvg    int64
 	DurationMin int
 	DurationMax int
 	DurationAvg int
@@ -194,7 +196,9 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 	log.Debugf("checkpoints = %v", checkpoints)
 
 	cp := CheckpointMetrics{
-		Count:       -1,
+		CountMin:    -1,
+		CountMax:    -1,
+		CountAvg:    -1,
 		DurationMin: -1,
 		DurationMax: -1,
 		DurationAvg: -1,
@@ -218,7 +222,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		log.Debugf("sumDuration = %v", sumDuration)
 		log.Debugf("sumSize = %v", sumSize)
 
-		cp.Count = sumCount
+		cp.CountAvg = sumCount / int64(len(checkpoints))
 		cp.DurationAvg = sumDuration / len(checkpoints)
 		cp.SizeAvg = sumSize / int64(len(checkpoints))
 
@@ -240,6 +244,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 				sizeMin = checkpoint.Size
 			}
 		}
+		cp.CountMin = countMin
 		cp.DurationMin = durationMin
 		cp.SizeMin = sizeMin
 
@@ -259,6 +264,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 				sizeMax = checkpoint.Size
 			}
 		}
+		cp.CountMax = countMax
 		cp.DurationMax = durationMax
 		cp.SizeMax = sizeMax
 	}

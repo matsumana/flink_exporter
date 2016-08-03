@@ -115,9 +115,17 @@ func initExporter(c *cli.Context, reg *harness.MetricRegistry) (harness.Collecto
 	}))
 
 	// checkpoint
-	reg.Register("flink_checkpoint_count", prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "flink_checkpoint_count",
-		Help: "flink checkpoint count",
+	reg.Register("flink_checkpoint_count_avg", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_count_avg",
+		Help: "flink checkpoint count avg",
+	}))
+	reg.Register("flink_checkpoint_count_min", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_count_min",
+		Help: "flink checkpoint count min",
+	}))
+	reg.Register("flink_checkpoint_count_max", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_checkpoint_count_max",
+		Help: "flink checkpoint count max",
 	}))
 	reg.Register("flink_checkpoint_duration_min", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_checkpoint_duration_min",
@@ -179,7 +187,9 @@ func (col *collector) Collect(reg *harness.MetricRegistry) {
 	reg.Get("flink_write_records").(prometheus.Gauge).Set(float64(readWriteMertics.WriteRecords))
 
 	// checkpoint
-	reg.Get("flink_checkpoint_count").(prometheus.Gauge).Set(float64(checkpoint.Count))
+	reg.Get("flink_checkpoint_count_min").(prometheus.Gauge).Set(float64(checkpoint.CountMin))
+	reg.Get("flink_checkpoint_count_max").(prometheus.Gauge).Set(float64(checkpoint.CountMax))
+	reg.Get("flink_checkpoint_count_avg").(prometheus.Gauge).Set(float64(checkpoint.CountAvg))
 	reg.Get("flink_checkpoint_duration_min").(prometheus.Gauge).Set(float64(checkpoint.DurationMin))
 	reg.Get("flink_checkpoint_duration_max").(prometheus.Gauge).Set(float64(checkpoint.DurationMax))
 	reg.Get("flink_checkpoint_duration_avg").(prometheus.Gauge).Set(float64(checkpoint.DurationAvg))
