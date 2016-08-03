@@ -27,17 +27,31 @@ type CheckpointMetrics struct {
 	SizeAvg     int64
 }
 
+// see https://github.com/apache/flink/blob/release-1.0.3/flink-runtime/src/main/java/org/apache/flink/runtime/jobgraph/JobStatus.java
+// TODO Must modify, After Flink version up.
+type JobStatusMetrics struct {
+	Created    int
+	Running    int
+	Failing    int
+	Failed     int
+	Cancelling int
+	Canceled   int
+	Finished   int
+	Restarting int
+}
+
 type checkpoint struct {
 	Count    int64
 	Duration int
 	Size     int64
 }
 
-func (j *Job) GetMetrics(flinkJobManagerUrl string) (ReadWriteMertics, CheckpointMetrics) {
+func (j *Job) GetMetrics(flinkJobManagerUrl string) (ReadWriteMertics, CheckpointMetrics, JobStatusMetrics) {
 	jobs := j.getJobs(flinkJobManagerUrl)
 	readWrite := j.getReadWrite(flinkJobManagerUrl, jobs)
 	checkpoint := j.getCheckpoints(flinkJobManagerUrl, jobs)
-	return readWrite, checkpoint
+	jobStatus := j.getJobStatus(flinkJobManagerUrl, jobs)
+	return readWrite, checkpoint, jobStatus
 }
 
 func (j *Job) getJobs(flinkJobManagerUrl string) []string {
@@ -253,4 +267,56 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 	log.Debugf("checkpoint = %v", cp)
 
 	return cp
+}
+
+func (j *Job) getJobStatus(flinkJobManagerUrl string, jobs []string) JobStatusMetrics {
+	jobStatus := JobStatusMetrics{}
+	httpClient := HttpClient{}
+	for _, job := range jobs {
+		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
+		jsonStr, err := httpClient.Get(url)
+		if err != nil {
+			log.Errorf("HttpClient.Get = %v", err)
+			return JobStatusMetrics{}
+		}
+
+		// parse
+		js, err := simpleJson.NewJson([]byte(jsonStr))
+		if err != nil {
+			log.Errorf("simpleJson.NewJson = %v", err)
+			return JobStatusMetrics{}
+		}
+
+		// state
+		var state string
+		state, err = js.Get("state").String()
+		if err != nil {
+			log.Errorf("js.Get 'state' = %v", err)
+			return JobStatusMetrics{}
+		}
+		log.Debugf("state = %v", state)
+
+		switch state {
+		case "CREATED":
+			jobStatus.Created += 1
+		case "RUNNING":
+			jobStatus.Running += 1
+		case "FAILING":
+			jobStatus.Failing += 1
+		case "FAILED":
+			jobStatus.Failed += 1
+		case "CANCELLING":
+			jobStatus.Cancelling += 1
+		case "CANCELED":
+			jobStatus.Canceled += 1
+		case "FINISHED":
+			jobStatus.Finished += 1
+		case "RESTARTING":
+			jobStatus.Restarting += 1
+		}
+	}
+
+	log.Debugf("jobStatus = %v", jobStatus)
+
+	return jobStatus
 }

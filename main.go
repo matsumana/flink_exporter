@@ -62,6 +62,40 @@ func initExporter(c *cli.Context, reg *harness.MetricRegistry) (harness.Collecto
 		Help: "flink overview jobs-failed",
 	}))
 
+	// job status
+	reg.Register("flink_job_status_created", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_created",
+		Help: "flink job status created",
+	}))
+	reg.Register("flink_job_status_running", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_running",
+		Help: "flink job status running",
+	}))
+	reg.Register("flink_job_status_failing", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_failing",
+		Help: "flink job status failing",
+	}))
+	reg.Register("flink_job_status_failed", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_failed",
+		Help: "flink job status failed",
+	}))
+	reg.Register("flink_job_status_cancelling", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_cancelling",
+		Help: "flink job status cancelling",
+	}))
+	reg.Register("flink_job_status_canceled", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_canceled",
+		Help: "flink job status canceled",
+	}))
+	reg.Register("flink_job_status_finished", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_finished",
+		Help: "flink job status finished",
+	}))
+	reg.Register("flink_job_status_restarting", prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "flink_job_status_restarting",
+		Help: "flink job status restarting",
+	}))
+
 	// Read/Write
 	reg.Register("flink_read_bytes", prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "flink_read_bytes",
@@ -125,9 +159,20 @@ func (col *collector) Collect(reg *harness.MetricRegistry) {
 	reg.Get("flink_overview_jobs_cancelled").(prometheus.Gauge).Set(float64(overview.JobsCancelled))
 	reg.Get("flink_overview_jobs_failed").(prometheus.Gauge).Set(float64(overview.JobsFailed))
 
-	// Read/Write
 	j := c.Job{}
-	readWriteMertics, checkpoint := j.GetMetrics(flinkJobManagerUrl)
+	readWriteMertics, checkpoint, jobStatus := j.GetMetrics(flinkJobManagerUrl)
+
+	// job status
+	reg.Get("flink_job_status_created").(prometheus.Gauge).Set(float64(jobStatus.Created))
+	reg.Get("flink_job_status_running").(prometheus.Gauge).Set(float64(jobStatus.Running))
+	reg.Get("flink_job_status_failing").(prometheus.Gauge).Set(float64(jobStatus.Failing))
+	reg.Get("flink_job_status_failed").(prometheus.Gauge).Set(float64(jobStatus.Failed))
+	reg.Get("flink_job_status_cancelling").(prometheus.Gauge).Set(float64(jobStatus.Cancelling))
+	reg.Get("flink_job_status_canceled").(prometheus.Gauge).Set(float64(jobStatus.Canceled))
+	reg.Get("flink_job_status_finished").(prometheus.Gauge).Set(float64(jobStatus.Finished))
+	reg.Get("flink_job_status_restarting").(prometheus.Gauge).Set(float64(jobStatus.Restarting))
+
+	// Read/Write
 	reg.Get("flink_read_bytes").(prometheus.Gauge).Set(float64(readWriteMertics.ReadBytes))
 	reg.Get("flink_read_records").(prometheus.Gauge).Set(float64(readWriteMertics.ReadRecords))
 	reg.Get("flink_write_bytes").(prometheus.Gauge).Set(float64(readWriteMertics.WriteBytes))
