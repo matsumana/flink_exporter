@@ -28,7 +28,9 @@
   - flink_write_records
 
 - Checkpoint
-  - flink_checkpoint_count
+  - flink_checkpoint_count_min
+  - flink_checkpoint_count_max
+  - flink_checkpoint_count_avg
   - flink_checkpoint_duration_min
   - flink_checkpoint_duration_max
   - flink_checkpoint_duration_avg
