@@ -113,19 +113,18 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteMe
 			v, _ := vertice.(map[string]interface{})
 			log.Debugf("metrics = %v", v["metrics"])
 
-			// only start with 'Source'
+			metrics, _ := v["metrics"].(map[string]interface{})
+			record := ReadWriteMertics{}
 			if strings.HasPrefix(fmt.Sprint(v["name"]), "Source") {
-				metrics, _ := v["metrics"].(map[string]interface{})
-				record := ReadWriteMertics{}
-				record.ReadBytes, _ = strconv.ParseInt(fmt.Sprint(metrics["read-bytes"]), 10, 64)
 				record.WriteBytes, _ = strconv.ParseInt(fmt.Sprint(metrics["write-bytes"]), 10, 64)
-				record.ReadRecords, _ = strconv.ParseInt(fmt.Sprint(metrics["read-records"]), 10, 64)
 				record.WriteRecords, _ = strconv.ParseInt(fmt.Sprint(metrics["write-records"]), 10, 64)
-
-				readWrite.ReadBytes += record.ReadBytes
-				readWrite.ReadRecords += record.ReadRecords
 				readWrite.WriteBytes += record.WriteBytes
 				readWrite.WriteRecords += record.WriteRecords
+			} else {
+				record.ReadBytes, _ = strconv.ParseInt(fmt.Sprint(metrics["read-bytes"]), 10, 64)
+				record.ReadRecords, _ = strconv.ParseInt(fmt.Sprint(metrics["read-records"]), 10, 64)
+				readWrite.ReadBytes += record.ReadBytes
+				readWrite.ReadRecords += record.ReadRecords
 			}
 		}
 	}
