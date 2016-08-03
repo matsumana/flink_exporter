@@ -8,8 +8,8 @@
   - flink_overview_slots_available
   - flink_overview_jobs_running
   - flink_overview_jobs_finished
-  - flink_overview_jobs_failed
   - flink_overview_jobs_cancelled
+  - flink_overview_jobs_failed
 
 - Job status
   - flink_job_status_created
