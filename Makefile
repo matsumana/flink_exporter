@@ -3,6 +3,10 @@ GOX_OPTS="{{.Dir}}_{{.OS}}_{{.Arch}}_v$(VERSION)"
 
 all: mac linux
 
+.PHONY : fmt
+fmt:
+	go fmt ./...
+
 mac:
 	gox --osarch "darwin/amd64" --output $(GOX_OPTS)
 
