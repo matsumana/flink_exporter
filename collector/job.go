@@ -226,7 +226,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		cp.DurationAvg = sumDuration / len(checkpoints)
 		cp.SizeAvg = sumSize / int64(len(checkpoints))
 
-		latest := checkpoints[len(checkpoints) - 1]
+		latest := checkpoints[len(checkpoints)-1]
 
 		// min
 		countMin := latest.Count
