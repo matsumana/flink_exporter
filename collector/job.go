@@ -183,9 +183,9 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		log.Debugf("history = %v", histories)
 
 		if len(histories) > 0 {
-			history, _ := histories[0].(map[string]interface{})
-			checkpoint.Duration, _ = strconv.Atoi(fmt.Sprint(history["duration"]))
-			checkpoint.Size, _ = strconv.ParseInt(fmt.Sprint(history["size"]), 10, 64)
+			latest, _ := histories[len(histories)-1].(map[string]interface{})
+			checkpoint.Duration, _ = strconv.Atoi(fmt.Sprint(latest["duration"]))
+			checkpoint.Size, _ = strconv.ParseInt(fmt.Sprint(latest["size"]), 10, 64)
 
 			log.Debugf("checkpoint = %v", checkpoint)
 
@@ -226,12 +226,12 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		cp.DurationAvg = sumDuration / len(checkpoints)
 		cp.SizeAvg = sumSize / int64(len(checkpoints))
 
-		latest := checkpoints[len(checkpoints)-1]
+		first := checkpoints[0]
 
 		// min
-		countMin := latest.Count
-		durationMin := latest.Duration
-		sizeMin := latest.Size
+		countMin := first.Count
+		durationMin := first.Duration
+		sizeMin := first.Size
 		for _, checkpoint := range checkpoints {
 			// smaller?
 			if checkpoint.Count < countMin {
@@ -249,9 +249,9 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 		cp.SizeMin = sizeMin
 
 		// max
-		countMax := latest.Count
-		durationMax := latest.Duration
-		sizeMax := latest.Size
+		countMax := first.Count
+		durationMax := first.Duration
+		sizeMax := first.Size
 		for _, checkpoint := range checkpoints {
 			// bigger?
 			if checkpoint.Count > countMax {
