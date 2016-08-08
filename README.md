@@ -26,17 +26,15 @@
   - flink_read_records
   - flink_write_bytes
   - flink_write_records
+  - flink_read_bytes_total
+  - flink_read_records_total
+  - flink_write_bytes_total
+  - flink_write_records_total
 
 - Checkpoint
-  - flink_checkpoint_count_min
-  - flink_checkpoint_count_max
-  - flink_checkpoint_count_avg
-  - flink_checkpoint_duration_min
-  - flink_checkpoint_duration_max
-  - flink_checkpoint_duration_avg
-  - flink_checkpoint_size_min
-  - flink_checkpoint_size_max
-  - flink_checkpoint_size_avg
+  - flink_checkpoint_count
+  - flink_checkpoint_duration
+  - flink_checkpoint_size
 
 # Command Line Options
 
