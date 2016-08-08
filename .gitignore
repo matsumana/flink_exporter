@@ -1,3 +1,9 @@
-vendor
+# for IntelliJ
 .idea
-flink_exporter_*
+
+# for glide
+vendor
+
+# for release
+releases
+github_token

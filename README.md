@@ -64,6 +64,10 @@ Please read the [documentation](https://github.com/Masterminds/glide)
 $ glide install
 ```
 
+## install ghr
+
+Please read the [documentation](https://github.com/tcnksm/ghr)
+
 # Build
 
 ```
@@ -77,5 +81,11 @@ $ make linux
 # Run app
 
 ```
-$ ./flink_exporter_xxx_xxx <options>
+$ releases/darwin/amd64/flink_exporter <options>
+```
+
+# Release to GitHub
+
+```
+$ make release-upload
 ```
