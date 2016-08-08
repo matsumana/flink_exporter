@@ -36,6 +36,9 @@
   - flink_checkpoint_duration
   - flink_checkpoint_size
 
+- Exceptions
+  - flink_exception_count
+
 # Command Line Options
 
 Name     | Description | Default
