@@ -27,7 +27,7 @@ release-linux: build-linux
 	@$(MAKE) release-targz GOOS=linux GOARCH=amd64
 
 release-github-token:
-	@echo "file `github_token` is required"
+	if [ ! -f "./github_token" ]; then echo 'file github_token is required'; exit 1 ; fi
 
 release-upload: release-mac release-linux release-github-token
 	ghr -u $(GITHUB_USERNAME) -t $(shell cat github_token) --draft --replace $(VERSION) $(ARTIFACTS_DIR)
