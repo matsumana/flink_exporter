@@ -56,15 +56,15 @@ Please read the [documentation](https://github.com/mitchellh/gox)
 
 Please read the [documentation](https://github.com/Masterminds/glide)
 
+## install ghr
+
+Please read the [documentation](https://github.com/tcnksm/ghr)
+
 # Install the dependencies
 
 ```
 $ glide install
 ```
-
-## install ghr
-
-Please read the [documentation](https://github.com/tcnksm/ghr)
 
 # Build
 
