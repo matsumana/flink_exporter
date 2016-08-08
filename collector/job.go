@@ -38,6 +38,11 @@ type CheckpointMetrics struct {
 	Size     int64
 }
 
+type ExceptionMetrics struct {
+	JobName string
+	Count   int
+}
+
 // see https://github.com/apache/flink/blob/release-1.0.3/flink-runtime/src/main/java/org/apache/flink/runtime/jobgraph/JobStatus.java
 // TODO Must modify, After Flink version up.
 type JobStatusMetrics struct {
@@ -52,13 +57,14 @@ type JobStatusMetrics struct {
 	Restarting int
 }
 
-func (j *Job) GetMetrics(flinkJobManagerUrl string) ([]JobStatusMetrics, ReadWriteTotalMertics, []CheckpointMetrics) {
+func (j *Job) GetMetrics(flinkJobManagerUrl string) ([]JobStatusMetrics, ReadWriteTotalMertics, []CheckpointMetrics, []ExceptionMetrics) {
 	jobNames = make(map[string]string)
 	jobs := j.getJobs(flinkJobManagerUrl)
 	jobStatuses := j.getJobStatus(flinkJobManagerUrl, jobs)
 	readWrites := j.getReadWrite(flinkJobManagerUrl, jobs)
 	checkpoints := j.getCheckpoints(flinkJobManagerUrl, jobs)
-	return jobStatuses, readWrites, checkpoints
+	exceptions := j.getExceptions(flinkJobManagerUrl, jobs)
+	return jobStatuses, readWrites, checkpoints, exceptions
 }
 
 func (j *Job) getJobs(flinkJobManagerUrl string) []string {
@@ -280,4 +286,43 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) []Checkpo
 	log.Debugf("checkpoints = %v", checkpoints)
 
 	return checkpoints
+}
+
+func (j *Job) getExceptions(flinkJobManagerUrl string, jobs []string) []ExceptionMetrics {
+	exceptions := []ExceptionMetrics{}
+	httpClient := util.HttpClient{}
+	for _, job := range jobs {
+		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/exceptions"
+		jsonStr, err := httpClient.Get(url)
+		if err != nil {
+			log.Errorf("HttpClient.Get = %v", err)
+			return []ExceptionMetrics{}
+		}
+
+		// parse
+		js, err := simpleJson.NewJson([]byte(jsonStr))
+		if err != nil {
+			log.Errorf("simpleJson.NewJson = %v", err)
+			return []ExceptionMetrics{}
+		}
+
+		// exceptions
+		var allExceptions []interface{}
+		allExceptions, err = js.Get("all-exceptions").Array()
+		if err != nil {
+			log.Errorf("js.Get 'exceptions' = %v", err)
+			return []ExceptionMetrics{}
+		}
+		log.Debugf("allExceptions = %v", allExceptions)
+
+		exceptions = append(exceptions,
+			ExceptionMetrics{
+				JobName: jobNames[job],
+				Count:   len(allExceptions),
+			})
+	}
+
+	log.Debugf("exceptions = %v", exceptions)
+
+	return exceptions
 }

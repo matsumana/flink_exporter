@@ -145,6 +145,13 @@ func NewExporter(flinkJobManagerUrl string, namespace string) *Exporter {
 		Help:      "checkpoint_size"},
 		[]string{"jobName"})
 
+	// exceptions
+	gaugeVecs["exception_count"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "exception_count",
+		Help:      "exception_count"},
+		[]string{"jobName"})
+
 	return &Exporter{
 		gauges:             gauges,
 		gaugeVecs:          gaugeVecs,
@@ -190,7 +197,7 @@ func (e *Exporter) collectGauge() {
 
 func (e *Exporter) collectGaugeVec() {
 	j := collector.Job{}
-	jobStatuses, readWrites, checkpoints := j.GetMetrics(e.flinkJobManagerUrl)
+	jobStatuses, readWrites, checkpoints, exceptions := j.GetMetrics(e.flinkJobManagerUrl)
 
 	// job status
 	for _, value := range jobStatuses {
@@ -223,5 +230,11 @@ func (e *Exporter) collectGaugeVec() {
 		e.gaugeVecs["checkpoint_count"].WithLabelValues(value.JobName).Set(float64(value.Count))
 		e.gaugeVecs["checkpoint_duration"].WithLabelValues(value.JobName).Set(float64(value.Duration))
 		e.gaugeVecs["checkpoint_size"].WithLabelValues(value.JobName).Set(float64(value.Size))
+	}
+
+	// exceptions
+	for _, value := range exceptions {
+		log.Debugf("exceptions=%v", value)
+		e.gaugeVecs["exception_count"].WithLabelValues(value.JobName).Set(float64(value.Count))
 	}
 }
