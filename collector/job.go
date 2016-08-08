@@ -4,6 +4,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	simpleJson "github.com/bitly/go-simplejson"
+	"github.com/matsumana/flink_exporter/util"
 	"strconv"
 	"strings"
 )
@@ -58,7 +59,7 @@ func (j *Job) GetMetrics(flinkJobManagerUrl string) (ReadWriteMertics, Checkpoin
 
 func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 	url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs"
-	httpClient := HttpClient{}
+	httpClient := util.HttpClient{}
 	jsonStr, err := httpClient.Get(url)
 	if err != nil {
 		log.Errorf("HttpClient.Get = %v", err)
@@ -88,7 +89,7 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteMe
 	readWrite := ReadWriteMertics{}
 	for _, job := range jobs {
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
-		httpClient := HttpClient{}
+		httpClient := util.HttpClient{}
 		jsonStr, err := httpClient.Get(url)
 		if err != nil {
 			log.Errorf("HttpClient.Get = %v", err)
@@ -138,7 +139,7 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteMe
 
 func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) CheckpointMetrics {
 	checkpoints := []checkpoint{}
-	httpClient := HttpClient{}
+	httpClient := util.HttpClient{}
 	for _, job := range jobs {
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/checkpoints"
 		jsonStr, err := httpClient.Get(url)
@@ -276,7 +277,7 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) Checkpoin
 
 func (j *Job) getJobStatus(flinkJobManagerUrl string, jobs []string) JobStatusMetrics {
 	jobStatus := JobStatusMetrics{}
-	httpClient := HttpClient{}
+	httpClient := util.HttpClient{}
 	for _, job := range jobs {
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
 		jsonStr, err := httpClient.Get(url)

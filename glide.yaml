@@ -1,6 +1,7 @@
 package: github.com/matsumana/flink_exporter
 import:
-- package: github.com/kawamuray/prometheus-exporter-harness
+- package: gopkg.in/urfave/cli.v2
+- package: github.com/Sirupsen/logrus
 - package: github.com/bitly/go-simplejson
 - package: github.com/prometheus/client_golang
   subpackages:

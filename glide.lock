@@ -1,26 +1,22 @@
-hash: e5bd0769e91fa00d7d38ea524b2e032e4c7f813b78f257b8a538f41a11f23495
-updated: 2016-07-22T02:58:59.479070528+09:00
+hash: e09353b09bc0ca61ffc23034f530bc4a5fed7afbc8d6325b384d706f956426cf
+updated: 2016-08-08T15:42:14.050722821+09:00
 imports:
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/bitly/go-simplejson
   version: aabad6e819789e569bd6aabf444c935aa9ba1e44
 - name: github.com/golang/protobuf
-  version: 874264fbbb43f4d91e999fecb4b40143ed611400
+  version: c3cefd437628a0b7d31b34fe44b3a7a540e98527
   subpackages:
   - proto
-- name: github.com/kawamuray/prometheus-exporter-harness
-  version: 74c75991abbe2cde6574b2c603d832a78a807896
-  subpackages:
-  - harness
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/prometheus/client_golang
-  version: 28be15864ef9ba05d74fa6fd13b928fd250e8f01
+  version: 52437c81da6b127a9925d17eb3a382a2e5fd395e
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
@@ -28,7 +24,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 610701b0cb96fe82d0166b8e07979b174b6f06ae
+  version: ebdfc6da46522d58825777cf1f90490a5b1ef1d8
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -37,10 +33,10 @@ imports:
   version: abf152e5f3e97f2fafac028d2cc06c1feb87ffa5
 - name: github.com/Sirupsen/logrus
   version: a283a10442df8dc09befd873fab202bf8a253d6a
-- name: github.com/urfave/cli
-  version: 11c134509d89c2018675f369955218a180dc7428
 - name: golang.org/x/sys
   version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
   subpackages:
   - unix
+- name: gopkg.in/urfave/cli.v2
+  version: ee2e8aa5b22f55f006c27fd35765c62249a39aad
 devImports: []
