@@ -70,10 +70,10 @@ $ glide install
 
 ```
 # for Mac
-$ make mac
+$ make build-mac
 
 # for Linux
-$ make linux
+$ make build-linux
 ```
 
 # Run app
