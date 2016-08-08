@@ -79,7 +79,11 @@ $ make build-linux
 # Run app
 
 ```
+# for Mac
 $ releases/darwin/amd64/flink_exporter <options>
+
+# for Linux
+$ releases/linux/amd64/flink_exporter <options>
 ```
 
 # Release to GitHub
