@@ -23,6 +23,14 @@ type ReadWriteMertics struct {
 	WriteRecords int64
 }
 
+type ReadWriteTotalMertics struct {
+	ReadBytesTotal    int64
+	WriteBytesTotal   int64
+	ReadRecordsTotal  int64
+	WriteRecordsTotal int64
+	Details           []ReadWriteMertics
+}
+
 type CheckpointMetrics struct {
 	JobName  string
 	Count    int64
@@ -44,7 +52,7 @@ type JobStatusMetrics struct {
 	Restarting int
 }
 
-func (j *Job) GetMetrics(flinkJobManagerUrl string) ([]JobStatusMetrics, []ReadWriteMertics, []CheckpointMetrics) {
+func (j *Job) GetMetrics(flinkJobManagerUrl string) ([]JobStatusMetrics, ReadWriteTotalMertics, []CheckpointMetrics) {
 	jobNames = make(map[string]string)
 	jobs := j.getJobs(flinkJobManagerUrl)
 	jobStatuses := j.getJobStatus(flinkJobManagerUrl, jobs)
@@ -152,7 +160,8 @@ func (j *Job) getJobStatus(flinkJobManagerUrl string, jobs []string) []JobStatus
 	return jobStatuses
 }
 
-func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) []ReadWriteMertics {
+func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteTotalMertics {
+	total := ReadWriteTotalMertics{}
 	readWrites := []ReadWriteMertics{}
 	for _, job := range jobs {
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
@@ -160,14 +169,14 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) []ReadWrite
 		jsonStr, err := httpClient.Get(url)
 		if err != nil {
 			log.Errorf("HttpClient.Get = %v", err)
-			return []ReadWriteMertics{}
+			return ReadWriteTotalMertics{}
 		}
 
 		// parse
 		js, err := simpleJson.NewJson([]byte(jsonStr))
 		if err != nil {
 			log.Errorf("simpleJson.NewJson = %v", err)
-			return []ReadWriteMertics{}
+			return ReadWriteTotalMertics{}
 		}
 
 		// vertices
@@ -175,7 +184,7 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) []ReadWrite
 		vertices, err = js.Get("vertices").Array()
 		if err != nil {
 			log.Errorf("js.Get 'vertices' = %v", err)
-			return []ReadWriteMertics{}
+			return ReadWriteTotalMertics{}
 		}
 		log.Debugf("vertices = %v", vertices)
 
@@ -201,12 +210,19 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) []ReadWrite
 			}
 		}
 
+		total.ReadBytesTotal += readWrite.ReadBytes
+		total.ReadRecordsTotal += readWrite.ReadRecords
+		total.WriteBytesTotal += readWrite.WriteBytes
+		total.WriteRecordsTotal += readWrite.WriteRecords
+
 		readWrites = append(readWrites, readWrite)
 	}
 
 	log.Debugf("readWrites = %v", readWrites)
 
-	return readWrites
+	total.Details = readWrites
+
+	return total
 }
 
 func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) []CheckpointMetrics {

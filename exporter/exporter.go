@@ -110,6 +110,24 @@ func NewExporter(flinkJobManagerUrl string, namespace string) *Exporter {
 		Help:      "write_records"},
 		[]string{"jobName"})
 
+	// Read/Write total
+	gauges["read_bytes_total"] = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "read_bytes_total",
+		Help:      "read_bytes_total"})
+	gauges["read_records_total"] = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "read_records_total",
+		Help:      "read_records_total"})
+	gauges["write_bytes_total"] = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "write_bytes_total",
+		Help:      "write_bytes_total"})
+	gauges["write_records_total"] = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "write_records_total",
+		Help:      "write_records_total"})
+
 	// checkpoint
 	gaugeVecs["checkpoint_count"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
@@ -187,12 +205,18 @@ func (e *Exporter) collectGaugeVec() {
 	}
 
 	// Read/Write
-	for _, value := range readWrites {
+	for _, value := range readWrites.Details {
 		e.gaugeVecs["read_bytes"].WithLabelValues(value.JobName).Set(float64(value.ReadBytes))
 		e.gaugeVecs["read_records"].WithLabelValues(value.JobName).Set(float64(value.ReadRecords))
 		e.gaugeVecs["write_bytes"].WithLabelValues(value.JobName).Set(float64(value.WriteBytes))
 		e.gaugeVecs["write_records"].WithLabelValues(value.JobName).Set(float64(value.WriteRecords))
 	}
+
+	// Read/Write total
+	e.gauges["read_bytes_total"].Set(float64(readWrites.ReadBytesTotal))
+	e.gauges["read_records_total"].Set(float64(readWrites.ReadRecordsTotal))
+	e.gauges["write_bytes_total"].Set(float64(readWrites.WriteBytesTotal))
+	e.gauges["write_records_total"].Set(float64(readWrites.WriteRecordsTotal))
 
 	// checkpoint
 	for _, value := range checkpoints {
