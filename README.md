@@ -42,9 +42,8 @@
 
 Name     | Description | Default
 ---------|-------------|----
-port | exporter's port number | 7979
+port | exporter's port number | 9160
 log-level | Set Logging level | info
-interval | Interval to fetch metrics from the endpoint in second | 60
 flink-job-manager-url | flink job manager url | http://localhost:8081/
 
 ---
