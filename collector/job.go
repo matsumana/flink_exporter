@@ -9,12 +9,6 @@ import (
 	"strings"
 )
 
-var (
-	jobNames map[string]string
-)
-
-type Job struct{}
-
 type ReadWriteMertics struct {
 	JobName      string
 	ReadBytes    int64
@@ -57,13 +51,23 @@ type JobStatusMetrics struct {
 	Restarting int
 }
 
+type jobDetail struct {
+	id          string
+	name        string
+	detail      *simpleJson.Json
+	checkPoints *simpleJson.Json
+	exceptions  *simpleJson.Json
+}
+
+type Job struct{}
+
 func (j *Job) GetMetrics(flinkJobManagerUrl string) ([]JobStatusMetrics, ReadWriteTotalMertics, []CheckpointMetrics, []ExceptionMetrics) {
-	jobNames = make(map[string]string)
 	jobs := j.getJobs(flinkJobManagerUrl)
-	jobStatuses := j.getJobStatus(flinkJobManagerUrl, jobs)
-	readWrites := j.getReadWrite(flinkJobManagerUrl, jobs)
-	checkpoints := j.getCheckpoints(flinkJobManagerUrl, jobs)
-	exceptions := j.getExceptions(flinkJobManagerUrl, jobs)
+	jobDetails := j.getJobDetails(flinkJobManagerUrl, jobs)
+	jobStatuses := j.getJobStatus(jobDetails)
+	readWrites := j.getReadWrite(jobDetails)
+	checkpoints := j.getCheckpoints(jobDetails)
+	exceptions := j.getExceptions(jobDetails)
 	return jobStatuses, readWrites, checkpoints, exceptions
 }
 
@@ -95,26 +99,26 @@ func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 	return jobs
 }
 
-func appendJobNameMap(jobId string, jobName string) {
-	jobNames[jobId] = jobName
-}
-
-func (j *Job) getJobStatus(flinkJobManagerUrl string, jobs []string) []JobStatusMetrics {
-	jobStatuses := []JobStatusMetrics{}
+func (j *Job) getJobDetails(flinkJobManagerUrl string, jobs []string) map[string]jobDetail {
 	httpClient := util.HttpClient{}
+	details := map[string]jobDetail{}
+	details = make(map[string]jobDetail)
+
+	// collect all metrics
 	for _, job := range jobs {
+		// --- detail ---------------------
 		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
 		jsonStr, err := httpClient.Get(url)
 		if err != nil {
 			log.Errorf("HttpClient.Get = %v", err)
-			return []JobStatusMetrics{}
+			continue
 		}
 
 		// parse
 		js, err := simpleJson.NewJson([]byte(jsonStr))
 		if err != nil {
 			log.Errorf("simpleJson.NewJson = %v", err)
-			return []JobStatusMetrics{}
+			continue
 		}
 
 		// job name
@@ -122,14 +126,62 @@ func (j *Job) getJobStatus(flinkJobManagerUrl string, jobs []string) []JobStatus
 		jobName, err = js.Get("name").String()
 		if err != nil {
 			log.Errorf("js.Get 'name' = %v", err)
-			return []JobStatusMetrics{}
+			continue
 		}
 		log.Debugf("jobName = %v", jobName)
-		appendJobNameMap(job, jobName)
 
+		detail := jobDetail{}
+		detail.id = job
+		detail.name = jobName
+		detail.detail = js
+
+		// --- checkpoints ---------------------
+		url = strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/checkpoints"
+		jsonStr, err = httpClient.Get(url)
+		if err != nil {
+			log.Errorf("HttpClient.Get = %v", err)
+			continue
+		}
+
+		// parse when exists checkpoints
+		if jsonStr != "{}" {
+			js, err = simpleJson.NewJson([]byte(jsonStr))
+			if err != nil {
+				log.Errorf("simpleJson.NewJson = %v", err)
+				continue
+			}
+			detail.checkPoints = js
+		}
+
+		// --- exceptions ---------------------
+		url = strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/exceptions"
+		jsonStr, err = httpClient.Get(url)
+		if err != nil {
+			log.Errorf("HttpClient.Get = %v", err)
+			continue
+		}
+
+		// parse
+		js, err = simpleJson.NewJson([]byte(jsonStr))
+		if err != nil {
+			log.Errorf("simpleJson.NewJson = %v", err)
+			continue
+		}
+		detail.exceptions = js
+
+		details[detail.id] = detail
+	}
+	log.Debugf("jobDetails = %v", details)
+
+	return details
+}
+
+func (j *Job) getJobStatus(jobDetails map[string]jobDetail) []JobStatusMetrics {
+	jobStatuses := []JobStatusMetrics{}
+	for _, jobDetail := range jobDetails {
 		// state
 		var state string
-		state, err = js.Get("state").String()
+		state, err := jobDetail.detail.Get("state").String()
 		if err != nil {
 			log.Errorf("js.Get 'state' = %v", err)
 			return []JobStatusMetrics{}
@@ -137,7 +189,7 @@ func (j *Job) getJobStatus(flinkJobManagerUrl string, jobs []string) []JobStatus
 		log.Debugf("state = %v", state)
 
 		jobStatus := JobStatusMetrics{}
-		jobStatus.JobName = jobNames[job]
+		jobStatus.JobName = jobDetail.name
 
 		switch state {
 		case "CREATED":
@@ -166,28 +218,13 @@ func (j *Job) getJobStatus(flinkJobManagerUrl string, jobs []string) []JobStatus
 	return jobStatuses
 }
 
-func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteTotalMertics {
+func (j *Job) getReadWrite(jobDetails map[string]jobDetail) ReadWriteTotalMertics {
 	total := ReadWriteTotalMertics{}
 	readWrites := []ReadWriteMertics{}
-	for _, job := range jobs {
-		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
-		httpClient := util.HttpClient{}
-		jsonStr, err := httpClient.Get(url)
-		if err != nil {
-			log.Errorf("HttpClient.Get = %v", err)
-			return ReadWriteTotalMertics{}
-		}
-
-		// parse
-		js, err := simpleJson.NewJson([]byte(jsonStr))
-		if err != nil {
-			log.Errorf("simpleJson.NewJson = %v", err)
-			return ReadWriteTotalMertics{}
-		}
-
+	for _, jobDetail := range jobDetails {
 		// vertices
 		var vertices []interface{}
-		vertices, err = js.Get("vertices").Array()
+		vertices, err := jobDetail.detail.Get("vertices").Array()
 		if err != nil {
 			log.Errorf("js.Get 'vertices' = %v", err)
 			return ReadWriteTotalMertics{}
@@ -195,7 +232,7 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteTo
 		log.Debugf("vertices = %v", vertices)
 
 		readWrite := ReadWriteMertics{}
-		readWrite.JobName = jobNames[job]
+		readWrite.JobName = jobDetail.name
 
 		for _, vertice := range vertices {
 			v, _ := vertice.(map[string]interface{})
@@ -231,53 +268,37 @@ func (j *Job) getReadWrite(flinkJobManagerUrl string, jobs []string) ReadWriteTo
 	return total
 }
 
-func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) []CheckpointMetrics {
+func (j *Job) getCheckpoints(jobDetails map[string]jobDetail) []CheckpointMetrics {
 	checkpoints := []CheckpointMetrics{}
-	httpClient := util.HttpClient{}
-	for _, job := range jobs {
-		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/checkpoints"
-		jsonStr, err := httpClient.Get(url)
-		if err != nil {
-			log.Errorf("HttpClient.Get = %v", err)
-			return []CheckpointMetrics{}
-		}
-
-		// not exists checkpoint info
-		if jsonStr == "{}" {
-			continue
-		}
-
-		// parse
-		js, err := simpleJson.NewJson([]byte(jsonStr))
-		if err != nil {
-			log.Errorf("simpleJson.NewJson = %v", err)
-			return []CheckpointMetrics{}
-		}
-
+	for _, jobDetail := range jobDetails {
 		checkpoint := CheckpointMetrics{}
-		checkpoint.JobName = jobNames[job]
+		checkpoint.JobName = jobDetail.name
+		if jobDetail.checkPoints != nil {
+			// count
+			var count int64
+			count, err := jobDetail.checkPoints.Get("count").Int64()
+			if err != nil {
+				log.Errorf("js.Get 'count' = %v", err)
+				return []CheckpointMetrics{}
+			}
+			log.Debugf("count = %v", count)
 
-		// count
-		checkpoint.Count, err = js.Get("count").Int64()
-		if err != nil {
-			log.Errorf("js.Get 'count' = %v", err)
-			return []CheckpointMetrics{}
-		}
-		log.Debugf("count = %v", checkpoint.Count)
+			checkpoint.Count = count
 
-		// history
-		var histories []interface{}
-		histories, err = js.Get("history").Array()
-		if err != nil {
-			log.Errorf("js.Get 'history' = %v", err)
-			return []CheckpointMetrics{}
-		}
-		log.Debugf("history = %v", histories)
+			// history
+			var histories []interface{}
+			histories, err = jobDetail.checkPoints.Get("history").Array()
+			if err != nil {
+				log.Errorf("js.Get 'history' = %v", err)
+				return []CheckpointMetrics{}
+			}
+			log.Debugf("history = %v", histories)
 
-		if len(histories) > 0 {
-			latest, _ := histories[len(histories)-1].(map[string]interface{})
-			checkpoint.Duration, _ = strconv.Atoi(fmt.Sprint(latest["duration"]))
-			checkpoint.Size, _ = strconv.ParseInt(fmt.Sprint(latest["size"]), 10, 64)
+			if len(histories) > 0 {
+				latest, _ := histories[len(histories)-1].(map[string]interface{})
+				checkpoint.Duration, _ = strconv.Atoi(fmt.Sprint(latest["duration"]))
+				checkpoint.Size, _ = strconv.ParseInt(fmt.Sprint(latest["size"]), 10, 64)
+			}
 		}
 
 		checkpoints = append(checkpoints, checkpoint)
@@ -288,36 +309,21 @@ func (j *Job) getCheckpoints(flinkJobManagerUrl string, jobs []string) []Checkpo
 	return checkpoints
 }
 
-func (j *Job) getExceptions(flinkJobManagerUrl string, jobs []string) []ExceptionMetrics {
+func (j *Job) getExceptions(jobDetails map[string]jobDetail) []ExceptionMetrics {
 	exceptions := []ExceptionMetrics{}
-	httpClient := util.HttpClient{}
-	for _, job := range jobs {
-		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/exceptions"
-		jsonStr, err := httpClient.Get(url)
-		if err != nil {
-			log.Errorf("HttpClient.Get = %v", err)
-			return []ExceptionMetrics{}
-		}
-
-		// parse
-		js, err := simpleJson.NewJson([]byte(jsonStr))
-		if err != nil {
-			log.Errorf("simpleJson.NewJson = %v", err)
-			return []ExceptionMetrics{}
-		}
-
+	for _, jobDetail := range jobDetails {
 		// exceptions
 		var allExceptions []interface{}
-		allExceptions, err = js.Get("all-exceptions").Array()
+		allExceptions, err := jobDetail.exceptions.Get("all-exceptions").Array()
 		if err != nil {
-			log.Errorf("js.Get 'exceptions' = %v", err)
+			log.Errorf("js.Get 'all-exceptions' = %v", err)
 			return []ExceptionMetrics{}
 		}
 		log.Debugf("allExceptions = %v", allExceptions)
 
 		exceptions = append(exceptions,
 			ExceptionMetrics{
-				JobName: jobNames[job],
+				JobName: jobDetail.name,
 				Count:   len(allExceptions),
 			})
 	}
