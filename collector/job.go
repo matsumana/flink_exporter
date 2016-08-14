@@ -234,22 +234,26 @@ func (j *Job) getReadWrite(jobDetails map[string]jobDetail) ReadWriteTotalMertic
 		readWrite := ReadWriteMertics{}
 		readWrite.JobName = jobDetail.name
 
-		for _, vertice := range vertices {
-			v, _ := vertice.(map[string]interface{})
-			log.Debugf("metrics = %v", v["metrics"])
-
-			metrics, _ := v["metrics"].(map[string]interface{})
-			record := ReadWriteMertics{}
-			if strings.HasPrefix(fmt.Sprint(v["name"]), "Source") {
-				record.WriteBytes, _ = strconv.ParseInt(fmt.Sprint(metrics["write-bytes"]), 10, 64)
-				record.WriteRecords, _ = strconv.ParseInt(fmt.Sprint(metrics["write-records"]), 10, 64)
-				readWrite.WriteBytes += record.WriteBytes
-				readWrite.WriteRecords += record.WriteRecords
-			} else {
-				record.ReadBytes, _ = strconv.ParseInt(fmt.Sprint(metrics["read-bytes"]), 10, 64)
-				record.ReadRecords, _ = strconv.ParseInt(fmt.Sprint(metrics["read-records"]), 10, 64)
-				readWrite.ReadBytes += record.ReadBytes
-				readWrite.ReadRecords += record.ReadRecords
+		for _, verticeTmp := range vertices {
+			if vertice, okVertice := verticeTmp.(map[string]interface{}); okVertice {
+				if metricsTmp, foundMetrics := vertice["metrics"]; foundMetrics {
+					if metrics, okMetrics := metricsTmp.(map[string]interface{}); okMetrics {
+						record := ReadWriteMertics{}
+						if name, foundName := vertice["name"]; foundName {
+							if strings.HasPrefix(fmt.Sprint(name), "Source") {
+								record.WriteBytes = j.getValueAsInt64(metrics, "write-bytes")
+								record.WriteRecords = j.getValueAsInt64(metrics, "write-records")
+								readWrite.WriteBytes += record.WriteBytes
+								readWrite.WriteRecords += record.WriteRecords
+							} else {
+								record.ReadBytes = j.getValueAsInt64(metrics, "read-bytes")
+								record.ReadRecords = j.getValueAsInt64(metrics, "read-records")
+								readWrite.ReadBytes += record.ReadBytes
+								readWrite.ReadRecords += record.ReadRecords
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -266,6 +270,18 @@ func (j *Job) getReadWrite(jobDetails map[string]jobDetail) ReadWriteTotalMertic
 	total.Details = readWrites
 
 	return total
+}
+
+func (j *Job) getValueAsInt64(metrics map[string]interface{}, key string) int64 {
+	if value, found := metrics[key]; found {
+		converted, err := strconv.ParseInt(fmt.Sprint(value), 10, 64)
+		if err != nil {
+			return 0
+		}
+		return converted
+	} else {
+		return 0
+	}
 }
 
 func (j *Job) getCheckpoints(jobDetails map[string]jobDetail) []CheckpointMetrics {
@@ -295,9 +311,13 @@ func (j *Job) getCheckpoints(jobDetails map[string]jobDetail) []CheckpointMetric
 			log.Debugf("history = %v", histories)
 
 			if len(histories) > 0 {
-				latest, _ := histories[len(histories)-1].(map[string]interface{})
-				checkpoint.Duration, _ = strconv.Atoi(fmt.Sprint(latest["duration"]))
-				checkpoint.Size, _ = strconv.ParseInt(fmt.Sprint(latest["size"]), 10, 64)
+				if latest, ok := histories[len(histories)-1].(map[string]interface{}); ok {
+					checkpoint.Duration = int(j.getValueAsInt64(latest, "duration"))
+					checkpoint.Size = j.getValueAsInt64(latest, "size")
+				} else {
+					checkpoint.Duration = 0
+					checkpoint.Size = 0
+				}
 			}
 		}
 
