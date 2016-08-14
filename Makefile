@@ -11,10 +11,10 @@ $(ARTIFACTS_DIR):
 fmt:
 	go fmt ./...
 
-build-mac:
+build-mac: fmt
 	gox --osarch "darwin/amd64" --output $(GOX_OPTS)
 
-build-linux:
+build-linux: fmt
 	gox --osarch "linux/amd64"  --output $(GOX_OPTS)
 
 release-targz: $(ARTIFACTS_DIR)
