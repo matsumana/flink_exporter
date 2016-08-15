@@ -100,116 +100,143 @@ func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 }
 
 func (j *Job) getJobDetails(flinkJobManagerUrl string, jobs []string) map[string]jobDetail {
+
+	log.Debugf("jobs = %v", jobs)
+
 	httpClient := util.HttpClient{}
-	details := map[string]jobDetail{}
-	details = make(map[string]jobDetail)
-
-	// collect all metrics
+	channel := make(chan jobDetail)
 	for _, job := range jobs {
-		// --- detail ---------------------
-		url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
-		jsonStr, err := httpClient.Get(url)
-		if err != nil {
-			log.Errorf("HttpClient.Get = %v", err)
-			continue
-		}
+		go func(job string) {
+			// --- detail ---------------------
+			url := strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job
+			jsonStr, err := httpClient.Get(url)
+			if err != nil {
+				log.Errorf("HttpClient.Get = %v", err)
+				channel <- jobDetail{}
+				return
+			}
 
-		// parse
-		js, err := simpleJson.NewJson([]byte(jsonStr))
-		if err != nil {
-			log.Errorf("simpleJson.NewJson = %v", err)
-			continue
-		}
+			// parse
+			js, err := simpleJson.NewJson([]byte(jsonStr))
+			if err != nil {
+				log.Errorf("simpleJson.NewJson = %v", err)
+				channel <- jobDetail{}
+				return
+			}
 
-		// job name
-		var jobName string
-		jobName, err = js.Get("name").String()
-		if err != nil {
-			log.Errorf("js.Get 'name' = %v", err)
-			continue
-		}
-		log.Debugf("jobName = %v", jobName)
+			// job name
+			var jobName string
+			jobName, err = js.Get("name").String()
+			if err != nil {
+				log.Errorf("js.Get 'name' = %v", err)
+				channel <- jobDetail{}
+				return
+			}
+			log.Debugf("jobName = %v", jobName)
 
-		detail := jobDetail{}
-		detail.id = job
-		detail.name = jobName
-		detail.detail = js
+			detail := jobDetail{}
+			detail.id = job
+			detail.name = jobName
+			detail.detail = js
 
-		// --- checkpoints ---------------------
-		url = strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/checkpoints"
-		jsonStr, err = httpClient.Get(url)
-		if err != nil {
-			log.Errorf("HttpClient.Get = %v", err)
-			continue
-		}
+			// --- checkpoints ---------------------
+			url = strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/checkpoints"
+			jsonStr, err = httpClient.Get(url)
+			if err != nil {
+				log.Errorf("HttpClient.Get = %v", err)
+				channel <- jobDetail{}
+				return
+			}
 
-		// parse when exists checkpoints
-		if jsonStr != "{}" {
+			// parse when exists checkpoints
+			if jsonStr != "{}" {
+				js, err = simpleJson.NewJson([]byte(jsonStr))
+				if err != nil {
+					log.Errorf("simpleJson.NewJson = %v", err)
+					channel <- jobDetail{}
+					return
+				}
+				detail.checkPoints = js
+			}
+
+			// --- exceptions ---------------------
+			url = strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/exceptions"
+			jsonStr, err = httpClient.Get(url)
+			if err != nil {
+				log.Errorf("HttpClient.Get = %v", err)
+				channel <- jobDetail{}
+				return
+			}
+
+			// parse
 			js, err = simpleJson.NewJson([]byte(jsonStr))
 			if err != nil {
 				log.Errorf("simpleJson.NewJson = %v", err)
-				continue
+				channel <- jobDetail{}
+				return
 			}
-			detail.checkPoints = js
-		}
+			detail.exceptions = js
 
-		// --- exceptions ---------------------
-		url = strings.Trim(flinkJobManagerUrl, "/") + "/jobs/" + job + "/exceptions"
-		jsonStr, err = httpClient.Get(url)
-		if err != nil {
-			log.Errorf("HttpClient.Get = %v", err)
-			continue
-		}
+			channel <- detail
+		}(job)
+	}
 
-		// parse
-		js, err = simpleJson.NewJson([]byte(jsonStr))
-		if err != nil {
-			log.Errorf("simpleJson.NewJson = %v", err)
-			continue
-		}
-		detail.exceptions = js
-
+	// receive from all channels
+	details := make(map[string]jobDetail)
+	for i := 0; i < len(jobs); i++ {
+		detail := <-channel
 		details[detail.id] = detail
 	}
+
 	log.Debugf("jobDetails = %v", details)
 
 	return details
 }
 
 func (j *Job) getJobStatus(jobDetails map[string]jobDetail) []JobStatusMetrics {
+	channel := make(chan JobStatusMetrics)
+	for _, jd := range jobDetails {
+		go func(jd jobDetail) {
+			// state
+			var state string
+			state, err := jd.detail.Get("state").String()
+			if err != nil {
+				log.Errorf("js.Get 'state' = %v", err)
+				channel <- JobStatusMetrics{}
+				return
+			}
+			log.Debugf("state = %v", state)
+
+			jobStatus := JobStatusMetrics{}
+			jobStatus.JobName = jd.name
+
+			switch state {
+			case "CREATED":
+				jobStatus.Created += 1
+			case "RUNNING":
+				jobStatus.Running += 1
+			case "FAILING":
+				jobStatus.Failing += 1
+			case "FAILED":
+				jobStatus.Failed += 1
+			case "CANCELLING":
+				jobStatus.Cancelling += 1
+			case "CANCELED":
+				jobStatus.Canceled += 1
+			case "FINISHED":
+				jobStatus.Finished += 1
+			case "RESTARTING":
+				jobStatus.Restarting += 1
+			}
+
+			channel <- jobStatus
+		}(jd)
+	}
+
+	// receive from all channels
 	jobStatuses := []JobStatusMetrics{}
-	for _, jobDetail := range jobDetails {
-		// state
-		var state string
-		state, err := jobDetail.detail.Get("state").String()
-		if err != nil {
-			log.Errorf("js.Get 'state' = %v", err)
-			return []JobStatusMetrics{}
-		}
-		log.Debugf("state = %v", state)
-
-		jobStatus := JobStatusMetrics{}
-		jobStatus.JobName = jobDetail.name
-
-		switch state {
-		case "CREATED":
-			jobStatus.Created += 1
-		case "RUNNING":
-			jobStatus.Running += 1
-		case "FAILING":
-			jobStatus.Failing += 1
-		case "FAILED":
-			jobStatus.Failed += 1
-		case "CANCELLING":
-			jobStatus.Cancelling += 1
-		case "CANCELED":
-			jobStatus.Canceled += 1
-		case "FINISHED":
-			jobStatus.Finished += 1
-		case "RESTARTING":
-			jobStatus.Restarting += 1
-		}
-
+	for i := 0; i < len(jobDetails); i++ {
+		jobStatus := <-channel
 		jobStatuses = append(jobStatuses, jobStatus)
 	}
 
@@ -219,57 +246,155 @@ func (j *Job) getJobStatus(jobDetails map[string]jobDetail) []JobStatusMetrics {
 }
 
 func (j *Job) getReadWrite(jobDetails map[string]jobDetail) ReadWriteTotalMertics {
-	total := ReadWriteTotalMertics{}
-	readWrites := []ReadWriteMertics{}
-	for _, jobDetail := range jobDetails {
-		// vertices
-		var vertices []interface{}
-		vertices, err := jobDetail.detail.Get("vertices").Array()
-		if err != nil {
-			log.Errorf("js.Get 'vertices' = %v", err)
-			return ReadWriteTotalMertics{}
-		}
-		log.Debugf("vertices = %v", vertices)
+	channel := make(chan ReadWriteMertics)
+	for _, jd := range jobDetails {
+		go func(jd jobDetail) {
+			// vertices
+			var vertices []interface{}
+			vertices, err := jd.detail.Get("vertices").Array()
+			if err != nil {
+				log.Errorf("js.Get 'vertices' = %v", err)
+				channel <- ReadWriteMertics{}
+				return
+			}
+			log.Debugf("vertices = %v", vertices)
 
-		readWrite := ReadWriteMertics{}
-		readWrite.JobName = jobDetail.name
+			readWrite := ReadWriteMertics{}
+			readWrite.JobName = jd.name
 
-		for _, verticeTmp := range vertices {
-			if vertice, okVertice := verticeTmp.(map[string]interface{}); okVertice {
-				if metricsTmp, foundMetrics := vertice["metrics"]; foundMetrics {
-					if metrics, okMetrics := metricsTmp.(map[string]interface{}); okMetrics {
-						record := ReadWriteMertics{}
-						if name, foundName := vertice["name"]; foundName {
-							if strings.HasPrefix(fmt.Sprint(name), "Source") {
-								record.WriteBytes = j.getValueAsInt64(metrics, "write-bytes")
-								record.WriteRecords = j.getValueAsInt64(metrics, "write-records")
-								readWrite.WriteBytes += record.WriteBytes
-								readWrite.WriteRecords += record.WriteRecords
-							} else {
-								record.ReadBytes = j.getValueAsInt64(metrics, "read-bytes")
-								record.ReadRecords = j.getValueAsInt64(metrics, "read-records")
-								readWrite.ReadBytes += record.ReadBytes
-								readWrite.ReadRecords += record.ReadRecords
+			for _, verticeTmp := range vertices {
+				if vertice, okVertice := verticeTmp.(map[string]interface{}); okVertice {
+					if metricsTmp, foundMetrics := vertice["metrics"]; foundMetrics {
+						if metrics, okMetrics := metricsTmp.(map[string]interface{}); okMetrics {
+							record := ReadWriteMertics{}
+							if name, foundName := vertice["name"]; foundName {
+								if strings.HasPrefix(fmt.Sprint(name), "Source") {
+									record.WriteBytes = j.getValueAsInt64(metrics, "write-bytes")
+									record.WriteRecords = j.getValueAsInt64(metrics, "write-records")
+									readWrite.WriteBytes += record.WriteBytes
+									readWrite.WriteRecords += record.WriteRecords
+								} else {
+									record.ReadBytes = j.getValueAsInt64(metrics, "read-bytes")
+									record.ReadRecords = j.getValueAsInt64(metrics, "read-records")
+									readWrite.ReadBytes += record.ReadBytes
+									readWrite.ReadRecords += record.ReadRecords
+								}
 							}
 						}
 					}
 				}
 			}
-		}
 
+			channel <- readWrite
+		}(jd)
+	}
+
+	// receive from all channels
+	total := ReadWriteTotalMertics{}
+	readWrites := []ReadWriteMertics{}
+	for i := 0; i < len(jobDetails); i++ {
+		readWrite := <-channel
 		total.ReadBytesTotal += readWrite.ReadBytes
 		total.ReadRecordsTotal += readWrite.ReadRecords
 		total.WriteBytesTotal += readWrite.WriteBytes
 		total.WriteRecordsTotal += readWrite.WriteRecords
-
 		readWrites = append(readWrites, readWrite)
 	}
 
-	log.Debugf("readWrites = %v", readWrites)
-
 	total.Details = readWrites
 
+	log.Debugf("readWrites = %v", total)
+
 	return total
+}
+
+func (j *Job) getCheckpoints(jobDetails map[string]jobDetail) []CheckpointMetrics {
+	channel := make(chan CheckpointMetrics)
+	for _, jd := range jobDetails {
+		go func(jd jobDetail) {
+			checkpoint := CheckpointMetrics{}
+			checkpoint.JobName = jd.name
+			if jd.checkPoints != nil {
+				// count
+				var count int64
+				count, err := jd.checkPoints.Get("count").Int64()
+				if err != nil {
+					log.Errorf("js.Get 'count' = %v", err)
+					channel <- CheckpointMetrics{}
+					return
+				}
+				log.Debugf("count = %v", count)
+
+				checkpoint.Count = count
+
+				// history
+				var histories []interface{}
+				histories, err = jd.checkPoints.Get("history").Array()
+				if err != nil {
+					log.Errorf("js.Get 'history' = %v", err)
+					channel <- CheckpointMetrics{}
+					return
+				}
+				log.Debugf("history = %v", histories)
+
+				if len(histories) > 0 {
+					if latest, ok := histories[len(histories)-1].(map[string]interface{}); ok {
+						checkpoint.Duration = int(j.getValueAsInt64(latest, "duration"))
+						checkpoint.Size = j.getValueAsInt64(latest, "size")
+					} else {
+						checkpoint.Duration = 0
+						checkpoint.Size = 0
+					}
+				}
+			}
+			channel <- checkpoint
+		}(jd)
+	}
+
+	// receive from all channels
+	checkpoints := []CheckpointMetrics{}
+	for i := 0; i < len(jobDetails); i++ {
+		checkpoint := <-channel
+		checkpoints = append(checkpoints, checkpoint)
+	}
+
+	log.Debugf("checkpoints = %v", checkpoints)
+
+	return checkpoints
+}
+
+func (j *Job) getExceptions(jobDetails map[string]jobDetail) []ExceptionMetrics {
+	channel := make(chan []string)
+	for _, jd := range jobDetails {
+		go func(jd jobDetail) {
+			// exceptions
+			var allExceptions []string
+			allExceptions, err := jd.exceptions.Get("all-exceptions").StringArray()
+			if err != nil {
+				log.Errorf("js.Get 'all-exceptions' = %v", err)
+				channel <- []string{}
+				return
+			}
+			log.Debugf("allExceptions = %v", allExceptions)
+
+			channel <- allExceptions
+		}(jd)
+	}
+
+	// receive from all channels
+	exceptions := []ExceptionMetrics{}
+	for _, jobDetail := range jobDetails {
+		allExceptions := <-channel
+		exceptions = append(exceptions,
+			ExceptionMetrics{
+				JobName: jobDetail.name,
+				Count:   len(allExceptions),
+			})
+	}
+
+	log.Debugf("exceptions = %v", exceptions)
+
+	return exceptions
 }
 
 func (j *Job) getValueAsInt64(metrics map[string]interface{}, key string) int64 {
@@ -282,73 +407,4 @@ func (j *Job) getValueAsInt64(metrics map[string]interface{}, key string) int64 
 	} else {
 		return 0
 	}
-}
-
-func (j *Job) getCheckpoints(jobDetails map[string]jobDetail) []CheckpointMetrics {
-	checkpoints := []CheckpointMetrics{}
-	for _, jobDetail := range jobDetails {
-		checkpoint := CheckpointMetrics{}
-		checkpoint.JobName = jobDetail.name
-		if jobDetail.checkPoints != nil {
-			// count
-			var count int64
-			count, err := jobDetail.checkPoints.Get("count").Int64()
-			if err != nil {
-				log.Errorf("js.Get 'count' = %v", err)
-				return []CheckpointMetrics{}
-			}
-			log.Debugf("count = %v", count)
-
-			checkpoint.Count = count
-
-			// history
-			var histories []interface{}
-			histories, err = jobDetail.checkPoints.Get("history").Array()
-			if err != nil {
-				log.Errorf("js.Get 'history' = %v", err)
-				return []CheckpointMetrics{}
-			}
-			log.Debugf("history = %v", histories)
-
-			if len(histories) > 0 {
-				if latest, ok := histories[len(histories)-1].(map[string]interface{}); ok {
-					checkpoint.Duration = int(j.getValueAsInt64(latest, "duration"))
-					checkpoint.Size = j.getValueAsInt64(latest, "size")
-				} else {
-					checkpoint.Duration = 0
-					checkpoint.Size = 0
-				}
-			}
-		}
-
-		checkpoints = append(checkpoints, checkpoint)
-	}
-
-	log.Debugf("checkpoints = %v", checkpoints)
-
-	return checkpoints
-}
-
-func (j *Job) getExceptions(jobDetails map[string]jobDetail) []ExceptionMetrics {
-	exceptions := []ExceptionMetrics{}
-	for _, jobDetail := range jobDetails {
-		// exceptions
-		var allExceptions []interface{}
-		allExceptions, err := jobDetail.exceptions.Get("all-exceptions").Array()
-		if err != nil {
-			log.Errorf("js.Get 'all-exceptions' = %v", err)
-			return []ExceptionMetrics{}
-		}
-		log.Debugf("allExceptions = %v", allExceptions)
-
-		exceptions = append(exceptions,
-			ExceptionMetrics{
-				JobName: jobDetail.name,
-				Count:   len(allExceptions),
-			})
-	}
-
-	log.Debugf("exceptions = %v", exceptions)
-
-	return exceptions
 }
