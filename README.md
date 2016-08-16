@@ -41,11 +41,16 @@
 
 # Command Line Options
 
-Name     | Description | Default
----------|-------------|----
-port | exporter's port number | 9160
-log-level | Set Logging level | info
-flink-job-manager-url | flink job manager url | http://localhost:8081/
+Name     | Description | Default | e.g.
+---------|-------------|----|---
+port | exporter's port number | 9160 |
+log-level | Set Logging level | info |
+flink-job-manager-url | flink job manager url | | http://host.domain.com:8081/
+yarn-resource-manager-url | flink job manager url | | http://host.domain.com:8088/ws/v1/cluster/apps?applicationTypes=Apache%20Flink&states=RUNNING
+
+## Options check
+
+Specify either `fink-job-manager-url` or `yarn-resource-manager-url`. Can't specify both.
 
 ---
 

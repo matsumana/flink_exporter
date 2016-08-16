@@ -101,11 +101,11 @@ func checkArgs(c *cli.Context) {
 	log.Debugf("yarn-resource-manager-url = %v", yarnResourceManagerUrl)
 
 	if flinkJobManagerUrl == "" && yarnResourceManagerUrl == "" {
-		log.Fatal("Please specify an option flink-job-manager-url or yarn-resource-manager-url")
+		log.Fatal("Specify either fink-job-manager-url or yarn-resource-manager-url. Can't specify both.")
 	}
 
 	if flinkJobManagerUrl != "" && yarnResourceManagerUrl != "" {
-		log.Fatal("flink-job-manager-url and yarn-resource-manager-url both can't be specified")
+		log.Fatal("Specify either fink-job-manager-url or yarn-resource-manager-url. Can't specify both.")
 	}
 }
 
