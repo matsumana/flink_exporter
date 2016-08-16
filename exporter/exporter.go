@@ -1,18 +1,22 @@
 package exporter
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	simpleJson "github.com/bitly/go-simplejson"
 	"github.com/matsumana/flink_exporter/collector"
+	"github.com/matsumana/flink_exporter/util"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Exporter struct {
-	gauges             map[string]prometheus.Gauge
-	gaugeVecs          map[string]*prometheus.GaugeVec
-	flinkJobManagerUrl string
+	gauges                 map[string]prometheus.Gauge
+	gaugeVecs              map[string]*prometheus.GaugeVec
+	flinkJobManagerUrl     string
+	yarnResourceManagerUrl string
 }
 
-func NewExporter(flinkJobManagerUrl string, namespace string) *Exporter {
+func NewExporter(flinkJobManagerUrl string, yarnResourceManagerUrl string, namespace string) *Exporter {
 	gauges := make(map[string]prometheus.Gauge)
 	gaugeVecs := make(map[string]*prometheus.GaugeVec)
 
@@ -153,9 +157,10 @@ func NewExporter(flinkJobManagerUrl string, namespace string) *Exporter {
 		[]string{"jobName"})
 
 	return &Exporter{
-		gauges:             gauges,
-		gaugeVecs:          gaugeVecs,
-		flinkJobManagerUrl: flinkJobManagerUrl,
+		gauges:                 gauges,
+		gaugeVecs:              gaugeVecs,
+		flinkJobManagerUrl:     flinkJobManagerUrl,
+		yarnResourceManagerUrl: yarnResourceManagerUrl,
 	}
 }
 
@@ -166,6 +171,52 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	for _, value := range e.gaugeVecs {
 		value.Describe(ch)
 	}
+}
+
+func (e *Exporter) getFlinkJobManagerUrl() []string {
+	if e.flinkJobManagerUrl != "" && e.yarnResourceManagerUrl == "" {
+		return []string{e.flinkJobManagerUrl}
+	} else {
+		return e.getFlinkJobManagerUrlFromYarn(e.yarnResourceManagerUrl)
+	}
+}
+
+func (e *Exporter) getFlinkJobManagerUrlFromYarn(yarnResourceManagerUrl string) []string {
+	httpClient := util.HttpClient{}
+	jsonStr, err := httpClient.Get(yarnResourceManagerUrl)
+	if err != nil {
+		log.Errorf("HttpClient.Get = %v", err)
+		return []string{}
+	}
+
+	// parse
+	js, err := simpleJson.NewJson([]byte(jsonStr))
+	if err != nil {
+		log.Errorf("simpleJson.NewJson = %v", err)
+		return []string{}
+	}
+
+	// apps
+	var apps []interface{}
+	apps, err = js.Get("apps").Get("app").Array()
+	if err != nil {
+		log.Errorf("js.Get 'apps' = %v", err)
+		return []string{}
+	}
+	log.Debugf("apps = %v", apps)
+
+	var trackingUrls []string
+	for _, app := range apps {
+		if a, ok := app.(map[string]interface{}); ok {
+			if trackingUrl, found := a["trackingUrl"]; found {
+				trackingUrls = append(trackingUrls, fmt.Sprint(trackingUrl))
+			}
+		}
+	}
+
+	log.Debugf("trackingUrls = %v", trackingUrls)
+
+	return trackingUrls
 }
 
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
@@ -185,7 +236,28 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 func (e *Exporter) collectGauge() {
 	// overview
 	o := collector.Overview{}
-	overview := o.GetMetrics(e.flinkJobManagerUrl)
+
+	flinkJobManagerUrls := e.getFlinkJobManagerUrl()
+	channel := make(chan collector.Overview)
+	for _, flinkJobManagerUrl := range flinkJobManagerUrls {
+		go func(flinkJobManagerUrl string) {
+			channel <- o.GetMetrics(flinkJobManagerUrl)
+		}(flinkJobManagerUrl)
+	}
+
+	// receive from all channels
+	overview := collector.Overview{}
+	for i := 0; i < len(flinkJobManagerUrls); i++ {
+		ov := <-channel
+		overview.TaskManagers += ov.TaskManagers
+		overview.SlotsTotal += ov.SlotsTotal
+		overview.SlotsAvailable += ov.SlotsAvailable
+		overview.JobsRunning += ov.JobsRunning
+		overview.JobsFinished += ov.JobsFinished
+		overview.JobsCancelled += ov.JobsCancelled
+		overview.JobsFailed += ov.JobsFailed
+	}
+
 	e.gauges["overview_taskmanagers"].Set(float64(overview.TaskManagers))
 	e.gauges["overview_slots_total"].Set(float64(overview.SlotsTotal))
 	e.gauges["overview_slots_available"].Set(float64(overview.SlotsAvailable))
@@ -197,44 +269,65 @@ func (e *Exporter) collectGauge() {
 
 func (e *Exporter) collectGaugeVec() {
 	j := collector.Job{}
-	jobStatuses, readWrites, checkpoints, exceptions := j.GetMetrics(e.flinkJobManagerUrl)
 
-	// job status
-	for _, value := range jobStatuses {
-		e.gaugeVecs["job_status_created"].WithLabelValues(value.JobName).Set(float64(value.Created))
-		e.gaugeVecs["job_status_running"].WithLabelValues(value.JobName).Set(float64(value.Running))
-		e.gaugeVecs["job_status_failing"].WithLabelValues(value.JobName).Set(float64(value.Failing))
-		e.gaugeVecs["job_status_failed"].WithLabelValues(value.JobName).Set(float64(value.Failed))
-		e.gaugeVecs["job_status_cancelling"].WithLabelValues(value.JobName).Set(float64(value.Cancelling))
-		e.gaugeVecs["job_status_canceled"].WithLabelValues(value.JobName).Set(float64(value.Canceled))
-		e.gaugeVecs["job_status_finished"].WithLabelValues(value.JobName).Set(float64(value.Finished))
-		e.gaugeVecs["job_status_restarting"].WithLabelValues(value.JobName).Set(float64(value.Restarting))
+	flinkJobManagerUrls := e.getFlinkJobManagerUrl()
+	log.Debugf("flinkJobManagerUrls=%v", flinkJobManagerUrls)
+
+	channel := make(chan collector.JobMetrics)
+	for _, flinkJobManagerUrl := range flinkJobManagerUrls {
+		go func(flinkJobManagerUrl string) {
+			channel <- j.GetMetrics(flinkJobManagerUrl)
+		}(flinkJobManagerUrl)
 	}
 
-	// Read/Write
-	for _, value := range readWrites.Details {
-		e.gaugeVecs["read_bytes"].WithLabelValues(value.JobName).Set(float64(value.ReadBytes))
-		e.gaugeVecs["read_records"].WithLabelValues(value.JobName).Set(float64(value.ReadRecords))
-		e.gaugeVecs["write_bytes"].WithLabelValues(value.JobName).Set(float64(value.WriteBytes))
-		e.gaugeVecs["write_records"].WithLabelValues(value.JobName).Set(float64(value.WriteRecords))
+	readWriteTotalMertics := collector.ReadWriteTotalMertics{}
+	log.Debugf("flinkJobManagerUrls=%v", flinkJobManagerUrls)
+	for i := 0; i < len(flinkJobManagerUrls); i++ {
+		jobMetrics := <-channel
+
+		// job status
+		for _, value := range jobMetrics.JobStatusMetrics {
+			e.gaugeVecs["job_status_created"].WithLabelValues(value.JobName).Set(float64(value.Created))
+			e.gaugeVecs["job_status_running"].WithLabelValues(value.JobName).Set(float64(value.Running))
+			e.gaugeVecs["job_status_failing"].WithLabelValues(value.JobName).Set(float64(value.Failing))
+			e.gaugeVecs["job_status_failed"].WithLabelValues(value.JobName).Set(float64(value.Failed))
+			e.gaugeVecs["job_status_cancelling"].WithLabelValues(value.JobName).Set(float64(value.Cancelling))
+			e.gaugeVecs["job_status_canceled"].WithLabelValues(value.JobName).Set(float64(value.Canceled))
+			e.gaugeVecs["job_status_finished"].WithLabelValues(value.JobName).Set(float64(value.Finished))
+			e.gaugeVecs["job_status_restarting"].WithLabelValues(value.JobName).Set(float64(value.Restarting))
+		}
+
+		// Read/Write
+		for _, value := range jobMetrics.ReadWriteTotalMertics.Details {
+			e.gaugeVecs["read_bytes"].WithLabelValues(value.JobName).Set(float64(value.ReadBytes))
+			e.gaugeVecs["read_records"].WithLabelValues(value.JobName).Set(float64(value.ReadRecords))
+			e.gaugeVecs["write_bytes"].WithLabelValues(value.JobName).Set(float64(value.WriteBytes))
+			e.gaugeVecs["write_records"].WithLabelValues(value.JobName).Set(float64(value.WriteRecords))
+		}
+
+		// Read/Write total
+		readWriteTotalMertics.ReadBytesTotal += jobMetrics.ReadWriteTotalMertics.ReadBytesTotal
+		readWriteTotalMertics.ReadRecordsTotal += jobMetrics.ReadWriteTotalMertics.ReadRecordsTotal
+		readWriteTotalMertics.WriteBytesTotal += jobMetrics.ReadWriteTotalMertics.WriteBytesTotal
+		readWriteTotalMertics.WriteRecordsTotal += jobMetrics.ReadWriteTotalMertics.WriteRecordsTotal
+
+		// checkpoint
+		for _, value := range jobMetrics.CheckpointMetrics {
+			e.gaugeVecs["checkpoint_count"].WithLabelValues(value.JobName).Set(float64(value.Count))
+			e.gaugeVecs["checkpoint_duration"].WithLabelValues(value.JobName).Set(float64(value.Duration))
+			e.gaugeVecs["checkpoint_size"].WithLabelValues(value.JobName).Set(float64(value.Size))
+		}
+
+		// exceptions
+		for _, value := range jobMetrics.ExceptionMetrics {
+			log.Debugf("exceptions=%v", value)
+			e.gaugeVecs["exception_count"].WithLabelValues(value.JobName).Set(float64(value.Count))
+		}
 	}
 
 	// Read/Write total
-	e.gauges["read_bytes_total"].Set(float64(readWrites.ReadBytesTotal))
-	e.gauges["read_records_total"].Set(float64(readWrites.ReadRecordsTotal))
-	e.gauges["write_bytes_total"].Set(float64(readWrites.WriteBytesTotal))
-	e.gauges["write_records_total"].Set(float64(readWrites.WriteRecordsTotal))
-
-	// checkpoint
-	for _, value := range checkpoints {
-		e.gaugeVecs["checkpoint_count"].WithLabelValues(value.JobName).Set(float64(value.Count))
-		e.gaugeVecs["checkpoint_duration"].WithLabelValues(value.JobName).Set(float64(value.Duration))
-		e.gaugeVecs["checkpoint_size"].WithLabelValues(value.JobName).Set(float64(value.Size))
-	}
-
-	// exceptions
-	for _, value := range exceptions {
-		log.Debugf("exceptions=%v", value)
-		e.gaugeVecs["exception_count"].WithLabelValues(value.JobName).Set(float64(value.Count))
-	}
+	e.gauges["read_bytes_total"].Set(float64(readWriteTotalMertics.ReadBytesTotal))
+	e.gauges["read_records_total"].Set(float64(readWriteTotalMertics.ReadRecordsTotal))
+	e.gauges["write_bytes_total"].Set(float64(readWriteTotalMertics.WriteBytesTotal))
+	e.gauges["write_records_total"].Set(float64(readWriteTotalMertics.WriteRecordsTotal))
 }

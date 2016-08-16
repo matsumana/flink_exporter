@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+type JobMetrics struct {
+	JobStatusMetrics      []JobStatusMetrics
+	ReadWriteTotalMertics ReadWriteTotalMertics
+	CheckpointMetrics     []CheckpointMetrics
+	ExceptionMetrics      []ExceptionMetrics
+}
 type ReadWriteMertics struct {
 	JobName      string
 	ReadBytes    int64
@@ -61,14 +67,20 @@ type jobDetail struct {
 
 type Job struct{}
 
-func (j *Job) GetMetrics(flinkJobManagerUrl string) ([]JobStatusMetrics, ReadWriteTotalMertics, []CheckpointMetrics, []ExceptionMetrics) {
+func (j *Job) GetMetrics(flinkJobManagerUrl string) JobMetrics {
 	jobs := j.getJobs(flinkJobManagerUrl)
 	jobDetails := j.getJobDetails(flinkJobManagerUrl, jobs)
 	jobStatuses := j.getJobStatus(jobDetails)
 	readWrites := j.getReadWrite(jobDetails)
 	checkpoints := j.getCheckpoints(jobDetails)
 	exceptions := j.getExceptions(jobDetails)
-	return jobStatuses, readWrites, checkpoints, exceptions
+
+	return JobMetrics{
+		JobStatusMetrics:      jobStatuses,
+		ReadWriteTotalMertics: readWrites,
+		CheckpointMetrics:     checkpoints,
+		ExceptionMetrics:      exceptions,
+	}
 }
 
 func (j *Job) getJobs(flinkJobManagerUrl string) []string {
