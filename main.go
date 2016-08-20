@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	version   = "1.0.0"
+	version   = "2.0.0"
 	endpoint  = "/metrics"
 	namespace = "flink"
 )
@@ -41,7 +41,10 @@ func main() {
 		&cli.StringFlag{
 			Name:  "flink-job-manager-url",
 			Usage: "flink job manager url",
-			Value: "http://localhost:8081/",
+		},
+		&cli.StringFlag{
+			Name:  "yarn-resource-manager-url",
+			Usage: "YARN ResourceManager url",
 		},
 	}
 	log.Debugf("opts = %v", opts)
@@ -65,11 +68,13 @@ func newApp(opts *appOpts) *cli.App {
 func action(c *cli.Context) error {
 
 	setupLogging(c)
+	checkArgs(c)
 
 	flinkJobManagerUrl := c.String("flink-job-manager-url")
+	yarnResourceManagerUrl := c.String("yarn-resource-manager-url")
 
 	// register exporter
-	exporter := exporter.NewExporter(flinkJobManagerUrl, namespace)
+	exporter := exporter.NewExporter(flinkJobManagerUrl, yarnResourceManagerUrl, namespace)
 	prometheus.MustRegister(exporter)
 
 	// http listen and serve
@@ -86,6 +91,22 @@ func action(c *cli.Context) error {
 	}
 
 	return nil
+}
+
+func checkArgs(c *cli.Context) {
+	flinkJobManagerUrl := c.String("flink-job-manager-url")
+	yarnResourceManagerUrl := c.String("yarn-resource-manager-url")
+
+	log.Debugf("flink-job-manager-url = %v", flinkJobManagerUrl)
+	log.Debugf("yarn-resource-manager-url = %v", yarnResourceManagerUrl)
+
+	if flinkJobManagerUrl == "" && yarnResourceManagerUrl == "" {
+		log.Fatal("Specify either fink-job-manager-url or yarn-resource-manager-url. Can't specify both.")
+	}
+
+	if flinkJobManagerUrl != "" && yarnResourceManagerUrl != "" {
+		log.Fatal("Specify either fink-job-manager-url or yarn-resource-manager-url. Can't specify both.")
+	}
 }
 
 func setupLogging(c *cli.Context) {
