@@ -43,8 +43,8 @@ type ExceptionMetrics struct {
 	Count   int
 }
 
-// see https://github.com/apache/flink/blob/release-1.0.3/flink-runtime/src/main/java/org/apache/flink/runtime/jobgraph/JobStatus.java
-// TODO Must modify, After Flink version up.
+// see https://github.com/apache/flink/blob/release-1.1.1/flink-runtime/src/main/java/org/apache/flink/runtime/jobgraph/JobStatus.java
+// TODO It's maybe need modify, After Flink version up.
 type JobStatusMetrics struct {
 	JobName    string
 	Created    int
@@ -55,6 +55,8 @@ type JobStatusMetrics struct {
 	Canceled   int
 	Finished   int
 	Restarting int
+	Suspended  int
+	Unknown    int
 }
 
 type jobDetail struct {
@@ -239,6 +241,10 @@ func (j *Job) getJobStatus(jobDetails map[string]jobDetail) []JobStatusMetrics {
 				jobStatus.Finished += 1
 			case "RESTARTING":
 				jobStatus.Restarting += 1
+			case "SUSPENDED":
+				jobStatus.Suspended += 1
+			default:
+				jobStatus.Unknown += 1
 			}
 
 			channel <- jobStatus

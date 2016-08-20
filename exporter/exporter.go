@@ -91,6 +91,16 @@ func NewExporter(flinkJobManagerUrl string, yarnResourceManagerUrl string, names
 		Name:      "job_status_restarting",
 		Help:      "job_status_restarting"},
 		[]string{"jobName"})
+	gaugeVecs["job_status_suspended"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "job_status_suspended",
+		Help:      "job_status_suspended"},
+		[]string{"jobName"})
+	gaugeVecs["job_status_unknown"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "job_status_unknown",
+		Help:      "job_status_unknown"},
+		[]string{"jobName"})
 
 	// Read/Write
 	gaugeVecs["read_bytes"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -295,6 +305,8 @@ func (e *Exporter) collectGaugeVec() {
 			e.gaugeVecs["job_status_canceled"].WithLabelValues(value.JobName).Set(float64(value.Canceled))
 			e.gaugeVecs["job_status_finished"].WithLabelValues(value.JobName).Set(float64(value.Finished))
 			e.gaugeVecs["job_status_restarting"].WithLabelValues(value.JobName).Set(float64(value.Restarting))
+			e.gaugeVecs["job_status_suspended"].WithLabelValues(value.JobName).Set(float64(value.Suspended))
+			e.gaugeVecs["job_status_unknown"].WithLabelValues(value.JobName).Set(float64(value.Unknown))
 		}
 
 		// Read/Write
