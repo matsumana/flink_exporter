@@ -56,25 +56,33 @@ Specify either `fink-job-manager-url` or `yarn-resource-manager-url`. Can't spec
 
 # Prepare
 
-## install gox
+## install the dependency tools
 
-Please read the [documentation](https://github.com/mitchellh/gox)
+```
+$ make install-depends
+```
 
-## install glide
+install below:
 
-Please read the [documentation](https://github.com/Masterminds/glide)
+- [glide](https://github.com/Masterminds/glide)
+- [gox](https://github.com/mitchellh/gox)
+- [ghr](https://github.com/tcnksm/ghr)
 
-## install ghr
-
-Please read the [documentation](https://github.com/tcnksm/ghr)
-
-# Install the dependencies
+## Install the dependency libraries
 
 ```
 $ glide install
 ```
 
 # Build
+
+## Build with Docker
+
+```
+$ make build-with-docker
+```
+
+## Build without Docker
 
 ```
 # for Mac

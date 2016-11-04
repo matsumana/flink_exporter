@@ -3,13 +3,25 @@ RELEASE_DIR=releases
 ARTIFACTS_DIR=$(RELEASE_DIR)/artifacts/$(VERSION)
 GOX_OPTS="$(RELEASE_DIR)/{{.OS}}/{{.Arch}}/{{.Dir}}"
 GITHUB_USERNAME=matsumana
+BUILD_GOLANG_VERSION=1.7.3
 
 $(ARTIFACTS_DIR):
 	@mkdir -p $(ARTIFACTS_DIR)
 
+.PHONY : install-depends
+install-depends:
+	go get github.com/Masterminds/glide
+	go get github.com/mitchellh/gox
+	go get github.com/tcnksm/ghr
+
 .PHONY : fmt
 fmt:
 	go fmt ./...
+
+build-with-docker:
+	docker run --rm -v "$(PWD)":/go/src/github.com/matsumana/flink_exporter -w /go/src/github.com/matsumana/flink_exporter golang:$(BUILD_GOLANG_VERSION) bash -c 'make install-depends && glide install && make build-all'
+
+build-all: build-mac build-linux
 
 build-mac: fmt
 	gox --osarch "darwin/amd64" --output $(GOX_OPTS)
