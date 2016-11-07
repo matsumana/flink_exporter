@@ -72,10 +72,10 @@ type Job struct{}
 func (j *Job) GetMetrics(flinkJobManagerUrl string) JobMetrics {
 	jobs := j.getJobs(flinkJobManagerUrl)
 	jobDetails := j.getJobDetails(flinkJobManagerUrl, jobs)
-	jobStatuses := j.getJobStatus(jobDetails)
-	readWrites := j.getReadWrite(jobDetails)
-	checkpoints := j.getCheckpoints(jobDetails)
-	exceptions := j.getExceptions(jobDetails)
+	jobStatuses, runningJobs := j.getJobStatus(jobDetails)
+	readWrites := j.getReadWrite(jobDetails, runningJobs)
+	checkpoints := j.getCheckpoints(jobDetails, runningJobs)
+	exceptions := j.getExceptions(jobDetails, runningJobs)
 
 	return JobMetrics{
 		JobStatusMetrics:      jobStatuses,
@@ -102,15 +102,48 @@ func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 	}
 
 	// jobs
+	var allJobs []string
 	var jobs []string
+
+	// jobs-running
 	jobs, err = js.Get("jobs-running").StringArray()
 	if err != nil {
 		log.Errorf("js.Get 'jobs-running' = %v", err)
 		return []string{}
 	}
-	log.Debugf("jobs = %v", jobs)
+	log.Debugf("jobs-running = %v", jobs)
+	allJobs = append(allJobs, jobs...)
 
-	return jobs
+	// jobs-finished
+	jobs, err = js.Get("jobs-finished").StringArray()
+	if err != nil {
+		log.Errorf("js.Get 'jobs-finished' = %v", err)
+		return []string{}
+	}
+	log.Debugf("jobs-finished = %v", jobs)
+	allJobs = append(allJobs, jobs...)
+
+	// jobs-cancelled
+	jobs, err = js.Get("jobs-cancelled").StringArray()
+	if err != nil {
+		log.Errorf("js.Get 'jobs-cancelled' = %v", err)
+		return []string{}
+	}
+	log.Debugf("jobs-cancelled = %v", jobs)
+	allJobs = append(allJobs, jobs...)
+
+	// jobs-failed
+	jobs, err = js.Get("jobs-failed").StringArray()
+	if err != nil {
+		log.Errorf("js.Get 'jobs-failed' = %v", err)
+		return []string{}
+	}
+	log.Debugf("jobs-failed = %v", jobs)
+	allJobs = append(allJobs, jobs...)
+
+	log.Debugf("allJobs = %v", allJobs)
+
+	return allJobs
 }
 
 func (j *Job) getJobDetails(flinkJobManagerUrl string, jobs []string) map[string]jobDetail {
@@ -207,63 +240,62 @@ func (j *Job) getJobDetails(flinkJobManagerUrl string, jobs []string) map[string
 	return details
 }
 
-func (j *Job) getJobStatus(jobDetails map[string]jobDetail) []JobStatusMetrics {
-	channel := make(chan JobStatusMetrics)
+func (j *Job) getJobStatus(jobDetails map[string]jobDetail) ([]JobStatusMetrics, map[string]string) {
+	jobStatusMetrics := make(map[string]*JobStatusMetrics)
 	for _, jd := range jobDetails {
-		go func(jd jobDetail) {
-			// state
-			var state string
-			state, err := jd.detail.Get("state").String()
-			if err != nil {
-				log.Errorf("js.Get 'state' = %v", err)
-				channel <- JobStatusMetrics{}
-				return
-			}
-			log.Debugf("state = %v", state)
-
-			jobStatus := JobStatusMetrics{}
-			jobStatus.JobName = jd.name
-
-			switch state {
-			case "CREATED":
-				jobStatus.Created += 1
-			case "RUNNING":
-				jobStatus.Running += 1
-			case "FAILING":
-				jobStatus.Failing += 1
-			case "FAILED":
-				jobStatus.Failed += 1
-			case "CANCELLING":
-				jobStatus.Cancelling += 1
-			case "CANCELED":
-				jobStatus.Canceled += 1
-			case "FINISHED":
-				jobStatus.Finished += 1
-			case "RESTARTING":
-				jobStatus.Restarting += 1
-			case "SUSPENDED":
-				jobStatus.Suspended += 1
-			default:
-				jobStatus.Unknown += 1
-			}
-
-			channel <- jobStatus
-		}(jd)
+		jobStatus := new(JobStatusMetrics)
+		jobStatus.JobName = jd.name
+		jobStatusMetrics[jobStatus.JobName] = jobStatus
 	}
 
-	// receive from all channels
+	runningJobs := make(map[string]string)
+	for _, jd := range jobDetails {
+		// state
+		var state string
+		state, err := jd.detail.Get("state").String()
+		if err != nil {
+			log.Errorf("js.Get 'state' = %v", err)
+			return []JobStatusMetrics{}, make(map[string]string)
+		}
+		log.Debugf("state = %v", state)
+
+		switch state {
+		case "CREATED":
+			jobStatusMetrics[jd.name].Created += 1
+		case "RUNNING":
+			jobStatusMetrics[jd.name].Running += 1
+
+			runningJobs[jd.name] = state
+		case "FAILING":
+			jobStatusMetrics[jd.name].Failing += 1
+		case "FAILED":
+			jobStatusMetrics[jd.name].Failed += 1
+		case "CANCELLING":
+			jobStatusMetrics[jd.name].Cancelling += 1
+		case "CANCELED":
+			jobStatusMetrics[jd.name].Canceled += 1
+		case "FINISHED":
+			jobStatusMetrics[jd.name].Finished += 1
+		case "RESTARTING":
+			jobStatusMetrics[jd.name].Restarting += 1
+		case "SUSPENDED":
+			jobStatusMetrics[jd.name].Suspended += 1
+		default:
+			jobStatusMetrics[jd.name].Unknown += 1
+		}
+	}
+
 	jobStatuses := []JobStatusMetrics{}
-	for i := 0; i < len(jobDetails); i++ {
-		jobStatus := <-channel
-		jobStatuses = append(jobStatuses, jobStatus)
+	for _, jsm := range jobStatusMetrics {
+		jobStatuses = append(jobStatuses, *jsm)
 	}
 
 	log.Debugf("jobStatuses = %v", jobStatuses)
 
-	return jobStatuses
+	return jobStatuses, runningJobs
 }
 
-func (j *Job) getReadWrite(jobDetails map[string]jobDetail) ReadWriteTotalMertics {
+func (j *Job) getReadWrite(jobDetails map[string]jobDetail, runningJobs map[string]string) ReadWriteTotalMertics {
 	channel := make(chan ReadWriteMertics)
 	for _, jd := range jobDetails {
 		go func(jd jobDetail) {
@@ -280,22 +312,26 @@ func (j *Job) getReadWrite(jobDetails map[string]jobDetail) ReadWriteTotalMertic
 			readWrite := ReadWriteMertics{}
 			readWrite.JobName = jd.name
 
-			for _, verticeTmp := range vertices {
-				if vertice, okVertice := verticeTmp.(map[string]interface{}); okVertice {
-					if metricsTmp, foundMetrics := vertice["metrics"]; foundMetrics {
-						if metrics, okMetrics := metricsTmp.(map[string]interface{}); okMetrics {
-							record := ReadWriteMertics{}
-							if name, foundName := vertice["name"]; foundName {
-								if strings.HasPrefix(fmt.Sprint(name), "Source") {
-									record.WriteBytes = j.getValueAsInt64(metrics, "write-bytes")
-									record.WriteRecords = j.getValueAsInt64(metrics, "write-records")
-									readWrite.WriteBytes += record.WriteBytes
-									readWrite.WriteRecords += record.WriteRecords
-								} else {
-									record.ReadBytes = j.getValueAsInt64(metrics, "read-bytes")
-									record.ReadRecords = j.getValueAsInt64(metrics, "read-records")
-									readWrite.ReadBytes += record.ReadBytes
-									readWrite.ReadRecords += record.ReadRecords
+			// collect metrics if status is running
+			// collect as 0, if status is not running
+			if _, ok := runningJobs[jd.name]; ok {
+				for _, verticeTmp := range vertices {
+					if vertice, okVertice := verticeTmp.(map[string]interface{}); okVertice {
+						if metricsTmp, foundMetrics := vertice["metrics"]; foundMetrics {
+							if metrics, okMetrics := metricsTmp.(map[string]interface{}); okMetrics {
+								record := ReadWriteMertics{}
+								if name, foundName := vertice["name"]; foundName {
+									if strings.HasPrefix(fmt.Sprint(name), "Source") {
+										record.WriteBytes = j.getValueAsInt64(metrics, "write-bytes")
+										record.WriteRecords = j.getValueAsInt64(metrics, "write-records")
+										readWrite.WriteBytes += record.WriteBytes
+										readWrite.WriteRecords += record.WriteRecords
+									} else {
+										record.ReadBytes = j.getValueAsInt64(metrics, "read-bytes")
+										record.ReadRecords = j.getValueAsInt64(metrics, "read-records")
+										readWrite.ReadBytes += record.ReadBytes
+										readWrite.ReadRecords += record.ReadRecords
+									}
 								}
 							}
 						}
@@ -326,45 +362,51 @@ func (j *Job) getReadWrite(jobDetails map[string]jobDetail) ReadWriteTotalMertic
 	return total
 }
 
-func (j *Job) getCheckpoints(jobDetails map[string]jobDetail) []CheckpointMetrics {
+func (j *Job) getCheckpoints(jobDetails map[string]jobDetail, runningJobs map[string]string) []CheckpointMetrics {
 	channel := make(chan CheckpointMetrics)
 	for _, jd := range jobDetails {
 		go func(jd jobDetail) {
 			checkpoint := CheckpointMetrics{}
 			checkpoint.JobName = jd.name
-			if jd.checkPoints != nil {
-				// count
-				var count int64
-				count, err := jd.checkPoints.Get("count").Int64()
-				if err != nil {
-					log.Errorf("js.Get 'count' = %v", err)
-					channel <- CheckpointMetrics{}
-					return
-				}
-				log.Debugf("count = %v", count)
 
-				checkpoint.Count = count
+			// collect metrics if status is running
+			// collect as 0, if status is not running
+			if _, ok := runningJobs[jd.name]; ok {
+				if jd.checkPoints != nil {
+					// count
+					var count int64
+					count, err := jd.checkPoints.Get("count").Int64()
+					if err != nil {
+						log.Errorf("js.Get 'count' = %v", err)
+						channel <- CheckpointMetrics{}
+						return
+					}
+					log.Debugf("count = %v", count)
 
-				// history
-				var histories []interface{}
-				histories, err = jd.checkPoints.Get("history").Array()
-				if err != nil {
-					log.Errorf("js.Get 'history' = %v", err)
-					channel <- CheckpointMetrics{}
-					return
-				}
-				log.Debugf("history = %v", histories)
+					checkpoint.Count = count
 
-				if len(histories) > 0 {
-					if latest, ok := histories[len(histories)-1].(map[string]interface{}); ok {
-						checkpoint.Duration = int(j.getValueAsInt64(latest, "duration"))
-						checkpoint.Size = j.getValueAsInt64(latest, "size")
-					} else {
-						checkpoint.Duration = 0
-						checkpoint.Size = 0
+					// history
+					var histories []interface{}
+					histories, err = jd.checkPoints.Get("history").Array()
+					if err != nil {
+						log.Errorf("js.Get 'history' = %v", err)
+						channel <- CheckpointMetrics{}
+						return
+					}
+					log.Debugf("history = %v", histories)
+
+					if len(histories) > 0 {
+						if latest, ok := histories[len(histories)-1].(map[string]interface{}); ok {
+							checkpoint.Duration = int(j.getValueAsInt64(latest, "duration"))
+							checkpoint.Size = j.getValueAsInt64(latest, "size")
+						} else {
+							checkpoint.Duration = 0
+							checkpoint.Size = 0
+						}
 					}
 				}
 			}
+
 			channel <- checkpoint
 		}(jd)
 	}
@@ -381,19 +423,24 @@ func (j *Job) getCheckpoints(jobDetails map[string]jobDetail) []CheckpointMetric
 	return checkpoints
 }
 
-func (j *Job) getExceptions(jobDetails map[string]jobDetail) []ExceptionMetrics {
+func (j *Job) getExceptions(jobDetails map[string]jobDetail, runningJobs map[string]string) []ExceptionMetrics {
 	channel := make(chan []string)
 	for _, jd := range jobDetails {
 		go func(jd jobDetail) {
 			// exceptions
 			var allExceptions []string
-			allExceptions, err := jd.exceptions.Get("all-exceptions").StringArray()
-			if err != nil {
-				log.Errorf("js.Get 'all-exceptions' = %v", err)
-				channel <- []string{}
-				return
+
+			// collect metrics if status is running
+			// collect as 0, if status is not running
+			if _, ok := runningJobs[jd.name]; ok {
+				allExceptions, err := jd.exceptions.Get("all-exceptions").StringArray()
+				if err != nil {
+					log.Errorf("js.Get 'all-exceptions' = %v", err)
+					channel <- []string{}
+					return
+				}
+				log.Debugf("allExceptions = %v", allExceptions)
 			}
-			log.Debugf("allExceptions = %v", allExceptions)
 
 			channel <- allExceptions
 		}(jd)
