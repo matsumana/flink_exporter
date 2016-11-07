@@ -51,55 +51,10 @@ func NewExporter(flinkJobManagerUrl string, yarnResourceManagerUrl string, names
 		Help:      "overview_jobs_failed"})
 
 	// job status
-	gaugeVecs["job_status_created"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_created",
-		Help:      "job_status_created"},
-		[]string{"jobName"})
 	gaugeVecs["job_status_running"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Name:      "job_status_running",
 		Help:      "job_status_running"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_failing"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_failing",
-		Help:      "job_status_failing"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_failed"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_failed",
-		Help:      "job_status_failed"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_cancelling"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_cancelling",
-		Help:      "job_status_cancelling"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_canceled"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_canceled",
-		Help:      "job_status_canceled"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_finished"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_finished",
-		Help:      "job_status_finished"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_restarting"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_restarting",
-		Help:      "job_status_restarting"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_suspended"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_suspended",
-		Help:      "job_status_suspended"},
-		[]string{"jobName"})
-	gaugeVecs["job_status_unknown"] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Name:      "job_status_unknown",
-		Help:      "job_status_unknown"},
 		[]string{"jobName"})
 
 	// Read/Write
@@ -297,16 +252,7 @@ func (e *Exporter) collectGaugeVec() {
 
 		// job status
 		for _, value := range jobMetrics.JobStatusMetrics {
-			e.gaugeVecs["job_status_created"].WithLabelValues(value.JobName).Set(float64(value.Created))
 			e.gaugeVecs["job_status_running"].WithLabelValues(value.JobName).Set(float64(value.Running))
-			e.gaugeVecs["job_status_failing"].WithLabelValues(value.JobName).Set(float64(value.Failing))
-			e.gaugeVecs["job_status_failed"].WithLabelValues(value.JobName).Set(float64(value.Failed))
-			e.gaugeVecs["job_status_cancelling"].WithLabelValues(value.JobName).Set(float64(value.Cancelling))
-			e.gaugeVecs["job_status_canceled"].WithLabelValues(value.JobName).Set(float64(value.Canceled))
-			e.gaugeVecs["job_status_finished"].WithLabelValues(value.JobName).Set(float64(value.Finished))
-			e.gaugeVecs["job_status_restarting"].WithLabelValues(value.JobName).Set(float64(value.Restarting))
-			e.gaugeVecs["job_status_suspended"].WithLabelValues(value.JobName).Set(float64(value.Suspended))
-			e.gaugeVecs["job_status_unknown"].WithLabelValues(value.JobName).Set(float64(value.Unknown))
 		}
 
 		// Read/Write
