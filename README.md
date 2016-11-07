@@ -12,14 +12,7 @@
   - flink_overview_jobs_failed
 
 - Job status
-  - flink_job_status_created
   - flink_job_status_running
-  - flink_job_status_failing
-  - flink_job_status_failed
-  - flink_job_status_cancelling
-  - flink_job_status_canceled
-  - flink_job_status_finished
-  - flink_job_status_restarting
 
 - Read/Write Bytes & Records
   - flink_read_bytes
