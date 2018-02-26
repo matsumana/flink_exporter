@@ -373,35 +373,22 @@ func (j *Job) getCheckpoints(jobDetails map[string]jobDetail, runningJobs map[st
 			// collect as 0, if status is not running
 			if _, ok := runningJobs[jd.name]; ok {
 				if jd.checkPoints != nil {
-					// count
-					var count int64
-					count, err := jd.checkPoints.Get("count").Int64()
-					if err != nil {
-						log.Errorf("js.Get 'count' = %v", err)
-						channel <- CheckpointMetrics{}
-						return
-					}
-					log.Debugf("count = %v", count)
-
-					checkpoint.Count = count
-
-					// history
-					var histories []interface{}
-					histories, err = jd.checkPoints.Get("history").Array()
-					if err != nil {
-						log.Errorf("js.Get 'history' = %v", err)
-						channel <- CheckpointMetrics{}
-						return
-					}
-					log.Debugf("history = %v", histories)
-
-					if len(histories) > 0 {
-						if latest, ok := histories[len(histories)-1].(map[string]interface{}); ok {
-							checkpoint.Duration = int(j.getValueAsInt64(latest, "duration"))
-							checkpoint.Size = j.getValueAsInt64(latest, "size")
-						} else {
-							checkpoint.Duration = 0
-							checkpoint.Size = 0
+					// Check json format for v1.2 or later
+					var err error
+					if _, ok := jd.checkPoints.CheckGet("counts"); ok {
+						checkpoint, err = j.checkpointMetrics(jd)
+						if err != nil {
+							log.Errorf("Failed Job.checkpointMetrics = %v", err)
+							channel <- CheckpointMetrics{}
+							return
+						}
+					} else {
+						// Earlier v1.1
+						checkpoint, err = j.checkpointMetricsAsV11(jd)
+						if err != nil {
+							log.Errorf("Failed Job.checkpointMetricsAsV11 = %v", err)
+							channel <- CheckpointMetrics{}
+							return
 						}
 					}
 				}
@@ -421,6 +408,69 @@ func (j *Job) getCheckpoints(jobDetails map[string]jobDetail, runningJobs map[st
 	log.Debugf("checkpoints = %v", checkpoints)
 
 	return checkpoints
+}
+
+func (j *Job) checkpointMetrics(jd jobDetail) (CheckpointMetrics, error) {
+	checkpoint := CheckpointMetrics{JobName: jd.name, Count: 0, Size: 0, Duration: 0}
+
+	count, err := jd.checkPoints.Get("counts").Get("total").Int64()
+	if err != nil {
+		log.Errorf("js.Get 'counts.total' = %v", err)
+		return CheckpointMetrics{}, err
+	}
+	checkpoint.Count = count
+
+	// latest history
+	if latest, ok := jd.checkPoints.Get("latest").CheckGet("completed"); ok {
+		var err error
+		checkpoint.Duration, err = latest.Get("end_to_end_duration").Int()
+		if err != nil {
+			log.Errorf("js.Get 'end_to_end_duration' = %v", err)
+		}
+
+		checkpoint.Size, err = latest.Get("state_size").Int64()
+		if err != nil {
+			log.Errorf("js.Get 'state_size' = %v", err)
+		}
+	} else {
+		log.Errorf("js.Get 'latest.completed' = %v", err)
+	}
+
+	return checkpoint, nil
+}
+
+func (j *Job) checkpointMetricsAsV11(jd jobDetail) (CheckpointMetrics, error) {
+	checkpoint := CheckpointMetrics{JobName: jd.name, Count: 0, Size: 0, Duration: 0}
+
+	// count
+	count, err := jd.checkPoints.Get("count").Int64()
+	if err != nil {
+		log.Errorf("js.Get 'count' = %v", err)
+		return CheckpointMetrics{}, err
+	}
+
+	log.Debugf("count = %v", count)
+	checkpoint.Count = count
+
+	// history
+	var histories []interface{}
+	histories, err = jd.checkPoints.Get("history").Array()
+	if err != nil {
+		log.Errorf("js.Get 'history' = %v", err)
+		return CheckpointMetrics{}, err
+	}
+	log.Debugf("history = %v", histories)
+
+	if len(histories) > 0 {
+		if latest, ok := histories[len(histories)-1].(map[string]interface{}); ok {
+			checkpoint.Duration = int(j.getValueAsInt64(latest, "duration"))
+			checkpoint.Size = j.getValueAsInt64(latest, "size")
+		} else {
+			checkpoint.Duration = 0
+			checkpoint.Size = 0
+		}
+	}
+	return checkpoint, nil
 }
 
 func (j *Job) getExceptions(jobDetails map[string]jobDetail, runningJobs map[string]string) []ExceptionMetrics {
