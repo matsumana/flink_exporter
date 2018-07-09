@@ -103,43 +103,50 @@ func (j *Job) getJobs(flinkJobManagerUrl string) []string {
 
 	// jobs
 	var allJobs []string
-	var jobs []string
 
-	// jobs-running
-	jobs, err = js.Get("jobs-running").StringArray()
-	if err != nil {
-		log.Errorf("js.Get 'jobs-running' = %v", err)
-		return []string{}
-	}
-	log.Debugf("jobs-running = %v", jobs)
-	allJobs = append(allJobs, jobs...)
+	if _, ok := js.CheckGet("jobs"); ok {
+		for _, job := range js.Get("jobs").MustArray() {
+			jss := job.(map[string]interface{})
+			allJobs = append(allJobs, jss["id"].(string))
+		}
+	} else {
+		var jobs []string
+		// jobs-running
+		jobs, err = js.Get("jobs-running").StringArray()
+		if err != nil {
+			log.Errorf("js.Get 'jobs-running' = %v", err)
+			return []string{}
+		}
+		log.Debugf("jobs-running = %v", jobs)
+		allJobs = append(allJobs, jobs...)
 
-	// jobs-finished
-	jobs, err = js.Get("jobs-finished").StringArray()
-	if err != nil {
-		log.Errorf("js.Get 'jobs-finished' = %v", err)
-		return []string{}
-	}
-	log.Debugf("jobs-finished = %v", jobs)
-	allJobs = append(allJobs, jobs...)
+		// jobs-finished
+		jobs, err = js.Get("jobs-finished").StringArray()
+		if err != nil {
+			log.Errorf("js.Get 'jobs-finished' = %v", err)
+			return []string{}
+		}
+		log.Debugf("jobs-finished = %v", jobs)
+		allJobs = append(allJobs, jobs...)
 
-	// jobs-cancelled
-	jobs, err = js.Get("jobs-cancelled").StringArray()
-	if err != nil {
-		log.Errorf("js.Get 'jobs-cancelled' = %v", err)
-		return []string{}
-	}
-	log.Debugf("jobs-cancelled = %v", jobs)
-	allJobs = append(allJobs, jobs...)
+		// jobs-cancelled
+		jobs, err = js.Get("jobs-cancelled").StringArray()
+		if err != nil {
+			log.Errorf("js.Get 'jobs-cancelled' = %v", err)
+			return []string{}
+		}
+		log.Debugf("jobs-cancelled = %v", jobs)
+		allJobs = append(allJobs, jobs...)
 
-	// jobs-failed
-	jobs, err = js.Get("jobs-failed").StringArray()
-	if err != nil {
-		log.Errorf("js.Get 'jobs-failed' = %v", err)
-		return []string{}
+		// jobs-failed
+		jobs, err = js.Get("jobs-failed").StringArray()
+		if err != nil {
+			log.Errorf("js.Get 'jobs-failed' = %v", err)
+			return []string{}
+		}
+		log.Debugf("jobs-failed = %v", jobs)
+		allJobs = append(allJobs, jobs...)
 	}
-	log.Debugf("jobs-failed = %v", jobs)
-	allJobs = append(allJobs, jobs...)
 
 	log.Debugf("allJobs = %v", allJobs)
 
